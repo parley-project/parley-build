@@ -6,12 +6,13 @@
 # Works on the project you run it from, so one copy serves every Parley project:
 #   cd parley-core && ../parley-build/release.sh
 #
-# Usage:  release.sh [-y] [-n] [-g | -G] [project-dir]
+# Usage:  release.sh [-y] [-n] [-g | -G] [-D] [project-dir]
 #         release.sh              release to Maven Central (asks first)
 #         release.sh -n           dry run: run the checks and show what would be done
 #         release.sh -y           no confirmation prompt
 #         release.sh -g           Maven Central AND GitHub Packages
 #         release.sh -G           GitHub Packages only (the old behaviour; allows SNAPSHOTs)
+#         release.sh -D           release a major version even though it has @Deprecated code
 #         release.sh ../parley-io release the project in that directory
 #
 # Steps:
@@ -26,10 +27,18 @@
 #   5. YOU press Publish on https://central.sonatype.com/publishing/deployments
 #      (the parent POM sets autoPublish=false, so nothing is public until you do)
 #
-# Checkpoint (warns, doesn't stop the release): tests that write scratch files under target/,
-# read files by a path relative to the working directory (resources/...), or use user.dir.
-# Move them to JUnit's @TempDir and the test class path, as parley-core did (its
-# src/test/resources/junit-platform.properties keeps the temp folders of failed tests).
+# Checkpoints:
+#   - Deprecated code (stops a major release): a major version (1.0.0, 2.0.0, ...) is where
+#     deprecated code is removed; anything @Deprecated in it stays in the public API until the
+#     next major version. Remove it first (or use -D). For other versions it is only listed.
+#   - Private script (stops the release): pom.xml, README.md and CHANGELOG.md are public (the pom
+#     is published to Central), so they must not mention release.sh, and the project must not
+#     track a copy of it.
+#   - Test paths (warns): tests that write scratch files under target/, or read files by a path
+#     relative to the working directory (resources/..., src/..., TestFiles/...), or use user.dir.
+#     Move them to JUnit's @TempDir and the test class path, as parley-core and parley-dns did
+#     (parley-core's src/test/resources/junit-platform.properties keeps the temp folders of failed
+#     tests; parley-dns's Fixtures class finds fixtures on the class path).
 #
 # Set the new version in pom.xml BEFORE running this script, e.g.
 #   mvn versions:set -DnewVersion=1.0.0 -DgenerateBackupPoms=false
@@ -43,14 +52,16 @@ set -euo pipefail
 REMOTE="origin"
 DRY_RUN=false
 ASSUME_YES=false
+ALLOW_DEPRECATED=false
 TO_CENTRAL=true
 TO_GITHUB=false
 DEPLOYMENTS_URL="https://central.sonatype.com/publishing/deployments"
 
-usage() { sed -n '3,38p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '3,46p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
-while getopts "yngGh" opt; do
+while getopts "yngGDh" opt; do
 	case "$opt" in
+		D) ALLOW_DEPRECATED=true ;;
 		y) ASSUME_YES=true ;;
 		n) DRY_RUN=true ;;
 		g) TO_GITHUB=true ;;
@@ -163,6 +174,27 @@ if ! $SNAPSHOT; then
 		&& die "Tag $TAG already exists on $REMOTE. Change the version in pom.xml first."
 fi
 
+# Checkpoint: no references to this private script in the public files, and no tracked copy of it
+PRIVATE_REFS="$(grep -nH 'release\.sh' pom.xml README.md CHANGELOG.md 2>/dev/null || true)"
+git ls-files --error-unmatch release.sh >/dev/null 2>&1 \
+	&& PRIVATE_REFS="${PRIVATE_REFS:+$PRIVATE_REFS
+}release.sh is tracked in git (git rm it)"
+[[ -z "$PRIVATE_REFS" ]] || die "Public files mention the private release script (pom.xml is published to Central):
+$PRIVATE_REFS"
+
+# Checkpoint: deprecated code. A major version is where it gets removed.
+DEPRECATED=""
+if [[ -d src/main/java ]]; then
+	DEPRECATED="$(grep -rn '@Deprecated' src/main/java 2>/dev/null | sed 's|^src/main/java/||' || true)"
+fi
+MAJOR=false
+[[ "$VERSION" =~ ^[0-9]+\.0\.0$ ]] && MAJOR=true
+if [[ -n "$DEPRECATED" ]] && $MAJOR && ! $ALLOW_DEPRECATED; then
+	die "$VERSION is a major version, but $(echo "$DEPRECATED" | wc -l | tr -d ' ') @Deprecated declaration(s) would ship with it and stay
+in the public API until the next major version. Remove them first, or rerun with -D to release them anyway:
+$(echo "$DEPRECATED" | head -20 | sed 's/^/    /' | cut -c1-150)"
+fi
+
 info "Checking that git can push to $REMOTE"
 git_push --dry-run --quiet "$REMOTE" "$BRANCH" \
 	|| die "git can't push $BRANCH to $REMOTE (see above). Nothing was deployed."
@@ -170,7 +202,13 @@ git_push --dry-run --quiet "$REMOTE" "$BRANCH" \
 # Checkpoint: tests that depend on the build's output folder or on the working directory
 TEST_PATHS=""
 if [[ -d src/test/java ]]; then
-	TEST_PATHS="$(grep -rnE '"(\./)?(target|resources)(/|")|user\.dir' src/test/java 2>/dev/null || true)"
+	#  A path string starting with one of these folders. Not flagged: comments, paths resolved against
+	#  another folder (new File(dir, "src/..."), write(root, "src/..."), dir.resolve("...")) and class
+	#  path lookups (getResource("..."), Fixtures.file("..."))
+	TEST_PATHS="$(grep -rnE '"(\./)?((target|resources|TestFiles)(/|")|src/)|user\.dir' src/test/java 2>/dev/null \
+		| grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//)' \
+		| grep -vE '(new File|write|Path\.of|Paths\.get)\([^"]+,[[:space:]]*"|\.resolve\("' \
+		| grep -vE 'getResource(AsStream)?\(|Fixtures\.file\(' || true)"
 fi
 
 CHANGES="$(git status --porcelain --untracked-files=no)"
@@ -196,12 +234,19 @@ else
 	echo "  Commit   : nothing to commit (working tree clean)"
 fi
 if [[ -n "$TEST_PATHS" ]]; then
-	echo "  Checkpoint: these tests use target/, resources/ or user.dir by path; consider moving them"
+	echo "  Checkpoint: these tests use target/, resources/, src/, TestFiles/ or user.dir by path; consider moving them"
 	echo "             to @TempDir and the test class path (see parley-core) - $(echo "$TEST_PATHS" | cut -d: -f1 | sort -u | wc -l | tr -d ' ') file(s):"
 	echo "$TEST_PATHS" | head -10 | sed -e 's/^src\/test\/java\///' -e 's/^/             /' | cut -c1-140
 	[[ $(echo "$TEST_PATHS" | wc -l) -gt 10 ]] && echo "             ..."
 	[[ -f src/test/resources/junit-platform.properties ]] \
 		|| echo "             (and add src/test/resources/junit-platform.properties, as in parley-core)"
+fi
+if [[ -n "$DEPRECATED" ]]; then
+	if $MAJOR; then
+		echo "  Deprecated: $(echo "$DEPRECATED" | wc -l | tr -d ' ') @Deprecated declaration(s) ship with this major version (-D)"
+	else
+		echo "  Deprecated: $(echo "$DEPRECATED" | wc -l | tr -d ' ') @Deprecated declaration(s); remove them in the next major version"
+	fi
 fi
 UNTRACKED="$(git ls-files --others --exclude-standard)"
 if [[ -n "$UNTRACKED" ]]; then
