@@ -6,13 +6,13 @@
 # Works on the project you run it from, so one copy serves every Parley project:
 #   cd parley-core && ../parley-build/release.sh
 #
-# Usage:  release.sh [-y] [-n] [-g | -G] [-D] [project-dir]
+# Usage:  release.sh [-y] [-n] [-g | -G] [-A] [project-dir]
 #         release.sh              release to Maven Central (asks first)
 #         release.sh -n           dry run: run the checks and show what would be done
 #         release.sh -y           no confirmation prompt
 #         release.sh -g           Maven Central AND GitHub Packages
 #         release.sh -G           GitHub Packages only (the old behaviour; allows SNAPSHOTs)
-#         release.sh -D           release a major version even though it has @Deprecated code
+#         release.sh -A           accept the findings (below) without being asked, e.g. with -y
 #         release.sh ../parley-io release the project in that directory
 #
 # Steps:
@@ -27,14 +27,16 @@
 #   5. YOU press Publish on https://central.sonatype.com/publishing/deployments
 #      (the parent POM sets autoPublish=false, so nothing is public until you do)
 #
-# Checkpoints:
-#   - Deprecated code (stops a major release): a major version (1.0.0, 2.0.0, ...) is where
-#     deprecated code is removed; anything @Deprecated in it stays in the public API until the
-#     next major version. Remove it first (or use -D). For other versions it is only listed.
-#   - Private script (stops the release): pom.xml, README.md and CHANGELOG.md are public (the pom
-#     is published to Central), so they must not mention release.sh, and the project must not
-#     track a copy of it.
-#   - Test paths (warns): tests that write scratch files under target/, or read files by a path
+# Findings: reported, and the release only goes ahead if you accept them (the default answer is no;
+# with -y, -A is needed too). There can be good reasons to release anyway.
+#   - Deprecated code in a major version (1.0.0, 2.0.0, ...): that is where deprecated code is
+#     removed; anything @Deprecated in it stays in the public API until the next major version.
+#     For other versions deprecations are normal and only listed.
+#   - The private script: pom.xml, README.md and CHANGELOG.md are public (the pom is published to
+#     Central), so they shouldn't mention release.sh, and the project shouldn't track a copy of it.
+#
+# Checkpoint (listed, no answer needed):
+#   - Test paths: tests that write scratch files under target/, or read files by a path
 #     relative to the working directory (resources/..., src/..., TestFiles/...), or use user.dir.
 #     Move them to JUnit's @TempDir and the test class path, as parley-core and parley-dns did
 #     (parley-core's src/test/resources/junit-platform.properties keeps the temp folders of failed
@@ -52,16 +54,16 @@ set -euo pipefail
 REMOTE="origin"
 DRY_RUN=false
 ASSUME_YES=false
-ALLOW_DEPRECATED=false
+ACCEPT_FINDINGS=false
 TO_CENTRAL=true
 TO_GITHUB=false
 DEPLOYMENTS_URL="https://central.sonatype.com/publishing/deployments"
 
 usage() { sed -n '3,46p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
-while getopts "yngGDh" opt; do
+while getopts "yngGAh" opt; do
 	case "$opt" in
-		D) ALLOW_DEPRECATED=true ;;
+		A) ACCEPT_FINDINGS=true ;;
 		y) ASSUME_YES=true ;;
 		n) DRY_RUN=true ;;
 		g) TO_GITHUB=true ;;
@@ -179,8 +181,12 @@ PRIVATE_REFS="$(grep -nH 'release\.sh' pom.xml README.md CHANGELOG.md 2>/dev/nul
 git ls-files --error-unmatch release.sh >/dev/null 2>&1 \
 	&& PRIVATE_REFS="${PRIVATE_REFS:+$PRIVATE_REFS
 }release.sh is tracked in git (git rm it)"
-[[ -z "$PRIVATE_REFS" ]] || die "Public files mention the private release script (pom.xml is published to Central):
-$PRIVATE_REFS"
+FINDINGS=""
+if [[ -n "$PRIVATE_REFS" ]]; then
+	FINDINGS+="  - Public files mention the private release script (pom.xml is published to Central):
+$(echo "$PRIVATE_REFS" | sed 's/^/      /')
+"
+fi
 
 # Checkpoint: deprecated code. A major version is where it gets removed.
 DEPRECATED=""
@@ -189,10 +195,12 @@ if [[ -d src/main/java ]]; then
 fi
 MAJOR=false
 [[ "$VERSION" =~ ^[0-9]+\.0\.0$ ]] && MAJOR=true
-if [[ -n "$DEPRECATED" ]] && $MAJOR && ! $ALLOW_DEPRECATED; then
-	die "$VERSION is a major version, but $(echo "$DEPRECATED" | wc -l | tr -d ' ') @Deprecated declaration(s) would ship with it and stay
-in the public API until the next major version. Remove them first, or rerun with -D to release them anyway:
-$(echo "$DEPRECATED" | head -20 | sed 's/^/    /' | cut -c1-150)"
+if [[ -n "$DEPRECATED" ]] && $MAJOR; then
+	FINDINGS+="  - $VERSION is a major version, but $(echo "$DEPRECATED" | wc -l | tr -d ' ') @Deprecated declaration(s) would ship with it and stay in
+    the public API until the next major version:
+$(echo "$DEPRECATED" | head -20 | sed 's/^/      /' | cut -c1-150)
+$([[ $(echo "$DEPRECATED" | wc -l) -gt 20 ]] && echo '      ...' || true)
+"
 fi
 
 info "Checking that git can push to $REMOTE"
@@ -243,7 +251,7 @@ if [[ -n "$TEST_PATHS" ]]; then
 fi
 if [[ -n "$DEPRECATED" ]]; then
 	if $MAJOR; then
-		echo "  Deprecated: $(echo "$DEPRECATED" | wc -l | tr -d ' ') @Deprecated declaration(s) ship with this major version (-D)"
+		echo "  Deprecated: $(echo "$DEPRECATED" | wc -l | tr -d ' ') @Deprecated declaration(s) in a major version (see FINDINGS)"
 	else
 		echo "  Deprecated: $(echo "$DEPRECATED" | wc -l | tr -d ' ') @Deprecated declaration(s); remove them in the next major version"
 	fi
@@ -254,6 +262,25 @@ if [[ -n "$UNTRACKED" ]]; then
 	echo "$UNTRACKED" | head -10 | sed 's/^/             /'
 fi
 echo
+
+if [[ -n "$FINDINGS" ]]; then
+	echo "FINDINGS - the release only goes ahead if you accept them:"
+	printf '%s' "$FINDINGS"
+	echo
+	if $DRY_RUN; then
+		echo "  (dry run: a real run asks you to accept these)"
+		echo
+	elif $ACCEPT_FINDINGS; then
+		echo "  Accepted with -A."
+		echo
+	elif $ASSUME_YES; then
+		die "The findings above need to be accepted: rerun without -y, or add -A to accept them."
+	else
+		read -r -p "Accept these findings and release anyway? [y/N] " answer
+		[[ "$answer" =~ ^[Yy]$ ]] || { echo "Cancelled. Nothing was deployed."; exit 1; }
+		echo
+	fi
+fi
 
 if ! $ASSUME_YES && ! $DRY_RUN; then
 	read -r -p "Release $VERSION? [y/N] " answer
