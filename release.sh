@@ -26,6 +26,11 @@
 #   5. YOU press Publish on https://central.sonatype.com/publishing/deployments
 #      (the parent POM sets autoPublish=false, so nothing is public until you do)
 #
+# Checkpoint (warns, doesn't stop the release): tests that write scratch files under target/,
+# read files by a path relative to the working directory (resources/...), or use user.dir.
+# Move them to JUnit's @TempDir and the test class path, as parley-core did (its
+# src/test/resources/junit-platform.properties keeps the temp folders of failed tests).
+#
 # Set the new version in pom.xml BEFORE running this script, e.g.
 #   mvn versions:set -DnewVersion=1.0.0 -DgenerateBackupPoms=false
 #   mvn versions:update-parent -DparentVersion=1.0.0
@@ -42,7 +47,7 @@ TO_CENTRAL=true
 TO_GITHUB=false
 DEPLOYMENTS_URL="https://central.sonatype.com/publishing/deployments"
 
-usage() { sed -n '3,33p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '3,38p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 while getopts "yngGh" opt; do
 	case "$opt" in
@@ -162,6 +167,12 @@ info "Checking that git can push to $REMOTE"
 git_push --dry-run --quiet "$REMOTE" "$BRANCH" \
 	|| die "git can't push $BRANCH to $REMOTE (see above). Nothing was deployed."
 
+# Checkpoint: tests that depend on the build's output folder or on the working directory
+TEST_PATHS=""
+if [[ -d src/test/java ]]; then
+	TEST_PATHS="$(grep -rnE '"(\./)?(target|resources)(/|")|user\.dir' src/test/java 2>/dev/null || true)"
+fi
+
 CHANGES="$(git status --porcelain --untracked-files=no)"
 TARGETS=()
 $TO_CENTRAL && TARGETS+=("Maven Central")
@@ -183,6 +194,14 @@ if [[ -n "$CHANGES" ]]; then
 	echo "$CHANGES" | sed 's/^/             /'
 else
 	echo "  Commit   : nothing to commit (working tree clean)"
+fi
+if [[ -n "$TEST_PATHS" ]]; then
+	echo "  Checkpoint: these tests use target/, resources/ or user.dir by path; consider moving them"
+	echo "             to @TempDir and the test class path (see parley-core) - $(echo "$TEST_PATHS" | cut -d: -f1 | sort -u | wc -l | tr -d ' ') file(s):"
+	echo "$TEST_PATHS" | head -10 | sed -e 's/^src\/test\/java\///' -e 's/^/             /' | cut -c1-140
+	[[ $(echo "$TEST_PATHS" | wc -l) -gt 10 ]] && echo "             ..."
+	[[ -f src/test/resources/junit-platform.properties ]] \
+		|| echo "             (and add src/test/resources/junit-platform.properties, as in parley-core)"
 fi
 UNTRACKED="$(git ls-files --others --exclude-standard)"
 if [[ -n "$UNTRACKED" ]]; then
