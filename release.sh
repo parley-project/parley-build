@@ -176,8 +176,12 @@ if ! $SNAPSHOT; then
 		&& die "Tag $TAG already exists on $REMOTE. Change the version in pom.xml first."
 fi
 
+# A multi-module project has its sources in the module folders; a single one in src/
+MAIN_DIRS="$(ls -d src/main/java */src/main/java 2>/dev/null || true)"
+TEST_DIRS="$(ls -d src/test/java */src/test/java 2>/dev/null || true)"
+
 # Checkpoint: no references to this private script in the public files, and no tracked copy of it
-PRIVATE_REFS="$(grep -nH 'release\.sh' pom.xml README.md CHANGELOG.md 2>/dev/null || true)"
+PRIVATE_REFS="$(grep -nH 'release\.sh' pom.xml */pom.xml README.md CHANGELOG.md 2>/dev/null || true)"
 git ls-files --error-unmatch release.sh >/dev/null 2>&1 \
 	&& PRIVATE_REFS="${PRIVATE_REFS:+$PRIVATE_REFS
 }release.sh is tracked in git (git rm it)"
@@ -190,8 +194,9 @@ fi
 
 # Checkpoint: deprecated code. A major version is where it gets removed.
 DEPRECATED=""
-if [[ -d src/main/java ]]; then
-	DEPRECATED="$(grep -rn '@Deprecated' src/main/java 2>/dev/null | sed 's|^src/main/java/||' || true)"
+if [[ -n "$MAIN_DIRS" ]]; then
+	# shellcheck disable=SC2086
+	DEPRECATED="$(grep -rn '@Deprecated' $MAIN_DIRS 2>/dev/null | sed 's|^\(.*/\)\{0,1\}src/main/java/||' || true)"
 fi
 MAJOR=false
 [[ "$VERSION" =~ ^[0-9]+\.0\.0$ ]] && MAJOR=true
@@ -209,11 +214,12 @@ git_push --dry-run --quiet "$REMOTE" "$BRANCH" \
 
 # Checkpoint: tests that depend on the build's output folder or on the working directory
 TEST_PATHS=""
-if [[ -d src/test/java ]]; then
+if [[ -n "$TEST_DIRS" ]]; then
 	#  A path string starting with one of these folders. Not flagged: comments, paths resolved against
 	#  another folder (new File(dir, "src/..."), write(root, "src/..."), dir.resolve("...")) and class
 	#  path lookups (getResource("..."), Fixtures.file("..."))
-	TEST_PATHS="$(grep -rnE '"(\./)?((target|resources|TestFiles)(/|")|src/)|user\.dir' src/test/java 2>/dev/null \
+	# shellcheck disable=SC2086
+	TEST_PATHS="$(grep -rnE '"(\./)?((target|resources|TestFiles)(/|")|src/)|user\.dir' $TEST_DIRS 2>/dev/null \
 		| grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//)' \
 		| grep -vE '(new File|write|Path\.of|Paths\.get)\([^"]+,[[:space:]]*"|\.resolve\("' \
 		| grep -vE 'getResource(AsStream)?\(|Fixtures\.file\(' || true)"
@@ -244,7 +250,7 @@ fi
 if [[ -n "$TEST_PATHS" ]]; then
 	echo "  Checkpoint: these tests use target/, resources/, src/, TestFiles/ or user.dir by path; consider moving them"
 	echo "             to @TempDir and the test class path (see parley-core) - $(echo "$TEST_PATHS" | cut -d: -f1 | sort -u | wc -l | tr -d ' ') file(s):"
-	echo "$TEST_PATHS" | head -10 | sed -e 's/^src\/test\/java\///' -e 's/^/             /' | cut -c1-140
+	echo "$TEST_PATHS" | head -10 | sed -e 's|^\(.*/\)\{0,1\}src/test/java/||' -e 's/^/             /' | cut -c1-140
 	[[ $(echo "$TEST_PATHS" | wc -l) -gt 10 ]] && echo "             ..."
 	[[ -f src/test/resources/junit-platform.properties ]] \
 		|| echo "             (and add src/test/resources/junit-platform.properties, as in parley-core)"
