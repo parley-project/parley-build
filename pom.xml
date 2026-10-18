@@ -4,7 +4,8 @@
 
     mvn -f parley-build/pom.xml verify
 
-  Maven sorts the modules by their dependencies, so the order listed here doesn't matter.
+  The modules are listed in dependency order, for reading; Maven sorts them by their
+  dependencies anyway.
   Useful variations:
 
     mvn -f parley-build/pom.xml install -DskipTests      build and install all to ~/.m2
@@ -25,20 +26,21 @@
   <packaging>pom</packaging>
 
   <name>Parley build aggregator</name>
-  <description>Builds the Parley modules, the widget libraries and the apps built on Parley (fsh, fsh-loupe, fsh-ide, fshdb) together. Not published.</description>
+  <description>Builds the Parley modules, the widget libraries and the apps built on Parley (fsh, fsh-loupe, fsh-ide, fshdb, the viewers and the console) together. Not published.</description>
 
   <properties>
     <maven.deploy.skip>true</maven.deploy.skip>
   </properties>
 
   <modules>
+    <!-- Listed in dependency order (each after what it uses), for reading; Maven sorts them anyway. -->
+
     <!-- Widget libraries (groupId us.bringardner) -->
     <module>../swing-widgets</module>
     <module>../fx-widgets</module>
 
-    <!-- Parent and BOM -->
+    <!-- Parent -->
     <module>../parley-parent</module>
-    <module>../parley-bom</module>
 
     <!-- Logo, icons and mascot -->
     <module>../parley-brand</module>
@@ -47,36 +49,51 @@
     <module>../parley-core</module>
     <module>../parley-io</module>
     <module>../parley-net</module>
-    <module>../parley-ftp</module>
     <module>../parley-dns</module>
+
+    <!-- Files (the file system API; the protocols below use it) -->
+    <module>../parley-files</module>
+
+    <!-- Protocols -->
+    <module>../parley-ftp</module>
     <module>../parley-ssh</module>
 
     <!-- Mail -->
     <module>../parley-mail</module>
-    <module>../parley-smtp</module>
-    <module>../parley-imap</module>
     <module>../parley-pop3</module>
+    <module>../parley-imap</module>
+    <module>../parley-smtp</module>
 
-    <!-- Files -->
-    <module>../parley-files</module>
+    <!-- File system providers -->
     <module>../parley-files-ftp</module>
     <module>../parley-files-sftp</module>
+    <module>../parley-files-sftp-jsch</module>
+    <module>../parley-files-sftp-mina</module>
+    <module>../parley-files-sftp-parley-ssh</module>
     <module>../parley-files-jdbc</module>
+    <module>../parley-credentials-keychain</module>
+
+    <!-- File UI components -->
     <module>../parley-files-swing</module>
     <module>../parley-files-fx</module>
-    <module>../parley-credentials-keychain</module>
-    <module>../parley-files-viewer</module>
-    <module>../parley-files-viewer-fx</module>
 
     <!-- Debugging: DAP and Loupe -->
     <module>../parley-dap</module>
     <module>../parley-loupe</module>
 
-    <!-- Apps built on Parley (groupId us.bringardner). fsh must be in this build: parley-files-viewer
-         depends on it, and without it Maven uses whatever fsh is in ~/.m2. -->
+    <!-- fsh (groupId us.bringardner). It must be in this build: the viewer and the console depend
+         on it, and without it Maven uses whatever fsh is in ~/.m2. -->
     <module>../fsh</module>
     <module>../fsh-loupe</module>
+
+    <!-- Applications -->
+    <module>../parley-files-viewer</module>
+    <module>../parley-files-viewer-fx</module>
+    <module>../parley-files-console</module>
     <module>../fsh-ide</module>
     <module>../fshdb</module>
+
+    <!-- The BOM lists the modules above, so it comes last -->
+    <module>../parley-bom</module>
   </modules>
 </project>
