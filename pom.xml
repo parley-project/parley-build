@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Aggregator for building everything in the Parley family with one command:
+  Aggregator for building everything in the Parley family with one command. It lists only
+  projects that are git repositories.
 
     mvn -f parley-build/pom.xml verify
 
@@ -88,7 +89,6 @@
 
     <!-- Applications -->
     <module>../parley-files-viewer</module>
-    <module>../parley-files-viewer-fx</module>
     <module>../parley-files-console</module>
     <module>../fsh-ide</module>
     <module>../fshdb</module>
