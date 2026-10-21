@@ -89,7 +89,7 @@
 
     <!-- Applications -->
     <module>../parley-files-viewer</module>
-    <module>../parley-files-console</module>
+    <module>../parley-files-viewer-tui</module>
     <module>../fsh-ide</module>
     <module>../fshdb</module>
 
