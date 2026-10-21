@@ -23,7 +23,7 @@
 
   <groupId>us.bringardner.parley</groupId>
   <artifactId>parley-build</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>2.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>Parley build aggregator</name>
