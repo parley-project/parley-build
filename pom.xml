@@ -49,6 +49,7 @@
     <!-- Core, I/O and network -->
     <module>../parley-core</module>
     <module>../parley-io</module>
+    <module>../parley-term</module>
     <module>../parley-net</module>
     <module>../parley-dns</module>
 
