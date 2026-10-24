@@ -1,0 +1,10 @@
+# Where each application's files are published besides this repository's pre-release (with the
+# secret PARLEY_RELEASE_TOKEN): a file whose name starts with PREFIX and then - or _ and a digit
+# goes on the pre-release v2.0.0-preview of github.com/parley-project/REPOSITORY.
+#
+#   PREFIX                    REPOSITORY
+fsh                         parley-fsh
+fsh-ide                     parley-fsh-ide
+parley-files-viewer         parley-files-viewer
+parley-files-viewer-tui     parley-files-viewer-tui
+# (parley-servers: this repository's pre-release only; it is six projects' servers)

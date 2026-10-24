@@ -1,0 +1,41 @@
+# The repositories the packaging builds, checked out beside parley-build (as on the developer's
+# machine, where the aggregator pom finds them as ../NAME):
+#
+#   FOLDER  REPOSITORY (in github.com/parley-project)  BRANCH
+#
+# packaging/checkout.sh clones them; a workflow run can choose another branch for some of them
+# (its "branches" input: FOLDER=BRANCH ...), to build a branch before it is merged.
+swing-widgets                 swing-widgets                 master
+fx-widgets                    fx-widgets                    master
+parley-parent                 parley-parent                 release-2.0.0
+parley-brand                  parley-brand                  release-2.0.0
+parley-core                   parley-core                   release-2.0.0
+parley-io                     parley-io                     release-2.0.0
+parley-term                   parley-term                   release-2.0.0
+parley-net                    parley-net                    release-2.0.0
+parley-dns                    parley-dns                    release-2.0.0
+parley-files                  parley-files                  release-2.0.0
+parley-ftp                    parley-ftp                    release-2.0.0
+parley-ssh                    parley-ssh                    release-2.0.0
+parley-mail                   parley-mail                   release-2.0.0
+parley-pop3                   parley-pop3                   release-2.0.0
+parley-imap                   parley-imap                   release-2.0.0
+parley-smtp                   parley-smtp                   release-2.0.0
+parley-files-ftp              parley-files-ftp              release-2.0.0
+parley-files-sftp             parley-files-sftp             release-2.0.0
+parley-files-sftp-jsch        parley-files-sftp-jsch        release-2.0.0
+parley-files-sftp-mina        parley-files-sftp-mina        release-2.0.0
+parley-files-sftp-parley-ssh  parley-files-sftp-parley-ssh  release-2.0.0
+parley-files-jdbc             parley-files-jdbc             release-2.0.0
+parley-credentials-keychain   parley-credentials-keychain   release-2.0.0
+parley-files-swing            parley-files-swing            release-2.0.0
+parley-files-fx               parley-files-fx               release-2.0.0
+parley-dap                    parley-dap                    release-2.0.0
+parley-loupe                  parley-loupe                  release-2.0.0
+fsh                           parley-fsh                    release-2.0.0
+fsh-loupe                     parley-fsh-loupe              release-2.0.0
+parley-files-viewer           parley-files-viewer           release-2.0.0
+parley-files-viewer-tui       parley-files-viewer-tui       release-2.0.0
+fsh-ide                       parley-fsh-ide                release-2.0.0
+fshdb                         parley-fshdb                  release-2.0.0
+parley-bom                    parley-bom                    release-2.0.0

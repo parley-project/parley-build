@@ -1,0 +1,304 @@
+# Pre-built Parley 2.0.0 previews: the whole of Parley built from its repositories' release-2.0.0
+# branches (packaging/repos.txt), then packaged on each platform (packaging/README.md):
+#
+#   plain archives    the jars and launchers, for a Java 17 or later already installed
+#   installers        each with its own Java runtime: .deb and .rpm (Linux), .dmg or .pkg
+#                     (macOS), .msi (Windows), for fsh, fsh-ide, the files viewer, pfv and the
+#                     servers (Linux packages, systemd services)
+#   native binaries   GraalVM: fsh (with the terminal file browser built in), fsh-ide and the files
+#                     viewer (Windows is the tested platform for the two window applications;
+#                     their Linux and macOS builds may fail without failing the run)
+#
+# The files go on this repository's pre-release v2.0.0-preview, replaced by each run. With the
+# secret PARLEY_RELEASE_TOKEN (a token that can write releases in parley-project's repositories),
+# each application's files also go on the pre-release v2.0.0-preview of its own repository
+# (packaging/publish.txt), where people without access to this one can download them.
+#
+# Run it by hand (Actions > preview > Run workflow), optionally building other branches of some
+# repositories (e.g. "fsh=installers parley-ssh=ssh-service"); every night it runs when a
+# release-2.0.0 branch (or this repository) has changed since the last run that built.
+
+name: preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      branches:
+        description: 'Other branches to build: FOLDER=BRANCH, separated by spaces (e.g. fsh=installers)'
+        required: false
+        default: ''
+  schedule:
+    - cron: '17 6 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preview
+  cancel-in-progress: false
+
+env:
+  BRANCHES: ${{ inputs.branches }}
+
+jobs:
+  # What would be built, and whether a nightly run has anything new to build
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+      key: ${{ steps.heads.outputs.key }}
+      label: ${{ steps.heads.outputs.label }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: parley-build
+
+      - name: The commits to build
+        id: heads
+        run: |
+          sh parley-build/packaging/checkout.sh --heads $BRANCHES > heads.txt
+          echo "parley-build ${{ github.ref_name }} ${{ github.sha }}" >> heads.txt
+          cat heads.txt
+          echo "key=preview-heads-$(sha256sum heads.txt | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "label=preview.$(date -u +%Y%m%d).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      # (an entry saved by the last run that built these commits)
+      - name: Built before?
+        id: built
+        uses: actions/cache/restore@v4
+        with:
+          path: heads.txt
+          key: ${{ steps.heads.outputs.key }}
+          lookup-only: true
+
+      - name: Decide
+        id: decide
+        run: |
+          if [ "${{ github.event_name }}" = schedule ] && [ "${{ steps.built.outputs.cache-hit }}" = true ]; then
+            echo "Nothing has changed since the last preview."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The plain archives and the installers, on each platform
+  package:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    name: package ${{ matrix.platform }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # (the oldest Ubuntu offered: fsh's keyboard library and fshexec need its glibc or later)
+          - { runner: ubuntu-22.04,     platform: linux,   arch: x86_64 }
+          - { runner: ubuntu-22.04-arm, platform: linux,   arch: aarch64 }
+          - { runner: macos-15,         platform: macos,   arch: aarch64 }
+          - { runner: macos-15-intel,   platform: macos,   arch: x86_64 }
+          - { runner: windows-2022,     platform: windows, arch: x86_64 }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: parley-build
+
+      - name: The repositories
+        run: sh parley-build/packaging/checkout.sh $BRANCHES
+
+      # (a JDK with jlink and jpackage; 25 for fsh's AOT cache)
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+          cache-dependency-path: parley-build/pom.xml
+
+      - name: MSVC (fsh's keyboard library)
+        if: matrix.platform == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # (jpackage's .msi needs the WiX Toolset: 3.14 when the runner doesn't have it)
+      - name: WiX Toolset
+        if: matrix.platform == 'windows'
+        run: |
+          if ! command -v candle.exe > /dev/null && ! command -v wix.exe > /dev/null; then
+            choco install wixtoolset -y --no-progress
+            echo "C:/Program Files (x86)/WiX Toolset v3.14/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: rpmbuild
+        if: matrix.platform == 'linux'
+        run: sudo apt-get install -y rpm
+
+      - name: Build all of Parley
+        working-directory: parley-build
+        run: mvn -B -ntp install -DskipTests
+
+      - name: Package
+        working-directory: parley-build
+        run: packaging/package.sh --label "${{ needs.changes.outputs.label }}" all
+
+      - name: Smoke test (Linux)
+        if: matrix.platform == 'linux'
+        working-directory: parley-build/dist
+        run: |
+          set -e
+          sudo dpkg -i fsh_*.deb parley-files-viewer-tui_*.deb parley-servers_*.deb
+          test "$(/usr/bin/fsh -c 'echo smoke-ok')" = smoke-ok
+          script -qec "pfv --help" /dev/null | grep -q usage
+          id parley
+          systemctl cat parley-pop3.service > /dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.platform }}-${{ matrix.arch }}
+          path: parley-build/dist/*
+          if-no-files-found: error
+
+  # The native binaries, on each platform
+  native:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    name: native ${{ matrix.platform }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-22.04,     platform: linux,   arch: x86_64 }
+          - { runner: ubuntu-22.04-arm, platform: linux,   arch: aarch64 }
+          - { runner: macos-15,         platform: macos,   arch: aarch64 }
+          - { runner: macos-15-intel,   platform: macos,   arch: x86_64 }
+          - { runner: windows-2022,     platform: windows, arch: x86_64 }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: parley-build
+
+      - name: The repositories
+        run: sh parley-build/packaging/checkout.sh $BRANCHES
+
+      # (25.0: GraalVM 25.1 and later ship macOS for Apple silicon only)
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25.0.1'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: maven
+          cache-dependency-path: parley-build/pom.xml
+
+      - name: MSVC (the native linker)
+        if: matrix.platform == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # (the X11 and font libraries native-image links the window applications against)
+      - name: Linux build libraries
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxext-dev libxrender-dev libxtst-dev libxi-dev \
+            libxrandr-dev libfreetype6-dev libfontconfig1-dev libasound2-dev
+
+      - name: Build all of Parley
+        working-directory: parley-build
+        run: mvn -B -ntp install -DskipTests
+
+      - name: fsh
+        working-directory: parley-build
+        run: packaging/native.sh --label "${{ needs.changes.outputs.label }}" fsh
+
+      - name: Smoke test (fsh)
+        if: matrix.platform != 'windows'
+        working-directory: parley-build/dist
+        run: |
+          set -e
+          mkdir -p ../target/smoke
+          tar -xzf fsh-*.tar.gz -C ../target/smoke
+          fsh=$(ls -d ../target/smoke/fsh-*/)fsh
+          test "$("$fsh" -c 'echo smoke-ok')" = smoke-ok
+          "$fsh" -c 'type view' | grep -q builtin
+
+      - name: fsh-ide and the files viewer
+        # (their native-image settings were recorded on Windows: elsewhere they may not build yet)
+        continue-on-error: ${{ matrix.platform != 'windows' }}
+        working-directory: parley-build
+        run: packaging/native.sh --label "${{ needs.changes.outputs.label }}" fsh-ide parley-files-viewer
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.platform }}-${{ matrix.arch }}
+          path: parley-build/dist/*
+          if-no-files-found: error
+
+  # Everything on the pre-release v2.0.0-preview
+  publish:
+    needs: [changes, package, native]
+    if: always() && needs.changes.outputs.build == 'true' && needs.package.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: parley-build
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: This repository's pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: ${{ needs.changes.outputs.label }}
+          NATIVE: ${{ needs.native.result }}
+        run: |
+          set -e
+          ls dist
+          {
+            echo "Parley 2.0.0, a preview ($LABEL), built from the release-2.0.0 branches:"
+            echo
+            sh parley-build/packaging/checkout.sh --heads $BRANCHES | sed 's/^/    /'
+            echo
+            echo "Every file has a .sha256 beside it. Nothing is signed or notarized."
+            [ "$NATIVE" = success ] || echo "Some native binaries were not built in this run ($NATIVE)."
+          } > notes.md
+          gh release delete v2.0.0-preview --yes --cleanup-tag -R "$GITHUB_REPOSITORY" || true
+          gh release create v2.0.0-preview -R "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+            --title "Parley 2.0.0 preview ($LABEL)" --notes-file notes.md dist/*
+
+      - name: The applications' own pre-releases
+        env:
+          GH_TOKEN: ${{ secrets.PARLEY_RELEASE_TOKEN }}
+          LABEL: ${{ needs.changes.outputs.label }}
+        run: |
+          set -e
+          if [ -z "$GH_TOKEN" ]; then
+            echo "No PARLEY_RELEASE_TOKEN: the files are on this repository's pre-release only."
+            exit 0
+          fi
+          grep -v '^#' parley-build/packaging/publish.txt | while read -r prefix repo; do
+            [ -n "$prefix" ] || continue
+            files=$(ls dist | grep -E "^${prefix}[-_][0-9]" || true)
+            [ -n "$files" ] || continue
+            echo "$repo: $(echo $files | wc -w) files"
+            gh release delete v2.0.0-preview --yes --cleanup-tag -R "parley-project/$repo" || true
+            gh release create v2.0.0-preview -R "parley-project/$repo" --prerelease --target release-2.0.0 \
+              --title "2.0.0 preview ($LABEL)" \
+              --notes "A preview of Parley 2.0.0, built from release-2.0.0 ($LABEL). Every file has a .sha256 beside it; nothing is signed or notarized." \
+              $(echo "$files" | sed 's:^:dist/:')
+          done
+
+      # (so the nightly run knows these commits are built)
+      - name: Remember what was built
+        run: sh parley-build/packaging/checkout.sh --heads $BRANCHES > heads.txt && echo "parley-build ${{ github.ref_name }} ${{ github.sha }}" >> heads.txt
+      - uses: actions/cache/save@v4
+        with:
+          path: heads.txt
+          key: ${{ needs.changes.outputs.key }}
