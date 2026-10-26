@@ -1,0 +1,172 @@
+#!/bin/sh
+# parley-mail-admin-setup: deploy parley-mail-admin (the war beside this script's folder) in a
+# Tomcat 10.1 or later, or (--remove) take it away again. The Linux packages run it; with the
+# plain archive, run it yourself (as root for a system Tomcat).
+#
+#   1. finds the Tomcat: --catalina-base DIR, else CATALINA_BASE, else Debian's and Ubuntu's
+#      tomcat10 (/etc/tomcat10), Fedora's, RHEL's and Amazon Linux's tomcat10 or tomcat
+#      (/etc/tomcat10, /etc/tomcat), or Homebrew's tomcat@10 or tomcat
+#   2. makes the admin's home (--home, default /var/lib/parley/mail-admin) for Tomcat's account
+#   3. puts the context, conf/Catalina/localhost/parley-mail-admin.xml, in the Tomcat: the war,
+#      the settings folder (--conf, default /etc/parley: the Parley servers') and the home
+#   4. for a systemd Tomcat: a drop-in that lets it write to those folders (Debian's Tomcat may
+#      write only to its own) and puts it in the servers' group (--group, default parley), which
+#      may edit the settings and read the mail store
+#
+# Then restart Tomcat; the pages are at http://localhost:8080/parley-mail-admin/.
+#
+# Usage: parley-mail-admin-setup [options]
+#   --catalina-base DIR  the Tomcat (its conf folder is DIR/conf)
+#   --service NAME       its systemd service (default: tomcat10 or tomcat, when there is one)
+#   --tomcat-user U      the account Tomcat runs as (default: the service's, else the owner of conf)
+#   --group G            the Parley servers' group (default parley; made when it isn't there)
+#   --conf DIR           the settings folder (default /etc/parley)
+#   --home DIR           the admin's home (default /var/lib/parley/mail-admin)
+#   --data DIR           the servers' data folder, for its lock folder (default /var/lib/parley)
+#   --remove             take the context and the drop-in away (the home and settings stay)
+#   --root DIR           do it all below DIR (to see what it would make)
+
+set -e
+
+self=$0
+while [ -L "$self" ]; do
+	link=$(readlink "$self")
+	case $link in
+	/*) self=$link ;;
+	*) self=$(dirname "$self")/$link ;;
+	esac
+done
+here=$(cd "$(dirname "$self")/.." && pwd)
+name=parley-mail-admin
+
+base="" service="" tuser="" group=parley conf=/etc/parley home=/var/lib/parley/mail-admin data=/var/lib/parley remove=no root=""
+while [ $# -gt 0 ]; do
+	case $1 in
+	--catalina-base) base=$2; shift ;;
+	--service) service=$2; shift ;;
+	--tomcat-user) tuser=$2; shift ;;
+	--group) group=$2; shift ;;
+	--conf) conf=$2; shift ;;
+	--home) home=$2; shift ;;
+	--data) data=$2; shift ;;
+	--remove) remove=yes ;;
+	--root) root=$2; shift ;;
+	-h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	*) echo "$name-setup: unknown option $1 (--help)" >&2; exit 2 ;;
+	esac
+	shift
+done
+R=$root
+asroot=no
+[ "$(id -u)" = 0 ] && asroot=yes
+
+# ---------------------------------------------------------------- 1. the Tomcat
+
+# (its conf folder; a Debian Tomcat's CATALINA_BASE/conf is /etc/tomcat10)
+tconf=""
+if [ -n "$base" ]; then
+	tconf=$base/conf
+elif [ -n "${CATALINA_BASE:-}" ]; then
+	tconf=$CATALINA_BASE/conf
+else
+	brew=""
+	command -v brew > /dev/null 2>&1 && brew=$(brew --prefix 2> /dev/null || true)
+	for c in /etc/tomcat10 /etc/tomcat \
+			${brew:+"$brew/opt/tomcat@10/libexec/conf"} /opt/homebrew/opt/tomcat@10/libexec/conf /usr/local/opt/tomcat@10/libexec/conf \
+			${brew:+"$brew/opt/tomcat/libexec/conf"} /opt/homebrew/opt/tomcat/libexec/conf /usr/local/opt/tomcat/libexec/conf; do
+		if [ -f "$R$c/server.xml" ]; then
+			tconf=$c
+			break
+		fi
+	done
+fi
+if [ -z "$tconf" ] || [ ! -d "$R$tconf" ]; then
+	echo "$name-setup: no Tomcat found (Debian, Ubuntu: apt install tomcat10; Fedora, RHEL, Amazon Linux: dnf install tomcat10 or tomcat; macOS: brew install tomcat@10), or give --catalina-base DIR" >&2
+	exit 1
+fi
+
+unit_file() { # SERVICE: its unit file, or nothing
+	for d in /etc/systemd/system /usr/lib/systemd/system /lib/systemd/system; do
+		if [ -f "$R$d/$1.service" ]; then
+			echo "$R$d/$1.service"
+			return
+		fi
+	done
+}
+if [ -z "$service" ]; then
+	case $tconf in
+	/etc/tomcat10) service=tomcat10 ;;
+	/etc/tomcat) service=tomcat ;;
+	esac
+	[ -n "$service" ] && [ -z "$(unit_file "$service")" ] && service=""
+fi
+if [ -z "$tuser" ]; then
+	if [ -n "$service" ] && [ -n "$(unit_file "$service")" ]; then
+		tuser=$(sed -n 's/^User=//p' "$(unit_file "$service")" | tail -1)
+	fi
+	if [ -z "$tuser" ]; then
+		# (Homebrew's Tomcat runs as the user who installed it)
+		tuser=$(ls -ld "$R$tconf" | awk '{print $3}')
+	fi
+fi
+
+context=$tconf/Catalina/localhost/$name.xml
+dropin_dir=/etc/systemd/system/$service.service.d
+dropin=$dropin_dir/$name.conf
+
+reload() {
+	if [ -z "$R" ] && [ -n "$service" ] && [ -d /run/systemd/system ]; then systemctl daemon-reload || true; fi
+}
+
+if [ "$remove" = yes ]; then
+	rm -f "$R$context"
+	[ -n "$service" ] && rm -f "$R$dropin" && rmdir "$R$dropin_dir" 2> /dev/null || true
+	reload
+	echo "$name-setup: took $name out of the Tomcat in $tconf (its home, $home, is kept)"
+	exit 0
+fi
+
+# ---------------------------------------------------------------- 2. the home
+
+if [ "$asroot" = yes ] && [ -z "$R" ] && command -v getent > /dev/null 2>&1 && ! getent group "$group" > /dev/null 2>&1; then
+	groupadd --system "$group"
+fi
+own() { # OWNER:GROUP FILE...: when root
+	if [ "$asroot" = yes ]; then chown "$@" 2> /dev/null || chown "${1%%:*}" "$2"; fi
+}
+mkdir -p "$R$home" "$R$conf"
+own "$tuser:$group" "$R$home"
+chmod 2770 "$R$home"
+
+# ---------------------------------------------------------------- 3. the context
+
+war=$here/$name.war
+if [ ! -f "$war" ]; then
+	echo "$name-setup: no $war" >&2
+	exit 1
+fi
+mkdir -p "$R$tconf/Catalina/localhost"
+sed -e "s#@WAR@#$war#g" -e "s#@CONF@#$conf#g" -e "s#@HOME@#$home#g" "$here/conf/$name.xml" > "$R$context"
+chmod 644 "$R$context"
+echo "  made $context"
+
+# ---------------------------------------------------------------- 4. the systemd drop-in
+
+if [ -n "$service" ]; then
+	paths="$conf $home"
+	[ -d "$R$data/mail/.parley-locks" ] && paths="$paths $data/mail/.parley-locks"
+	mkdir -p "$R$dropin_dir"
+	cat > "$R$dropin" <<EOF
+# Made by $name-setup: $name (in this Tomcat) edits the Parley servers' settings in $conf,
+# keeps its own files in $home, and reads the mail store as a member of the group $group.
+[Service]
+ReadWritePaths=$paths
+SupplementaryGroups=$group
+EOF
+	chmod 644 "$R$dropin"
+	echo "  made $dropin"
+	reload
+	echo "$name-setup: deployed in $service ($tconf), as $tuser in the group $group: restart it (systemctl restart $service)"
+else
+	echo "$name-setup: deployed in the Tomcat in $tconf (it runs as $tuser, who must be able to write $conf and $home): restart it"
+fi

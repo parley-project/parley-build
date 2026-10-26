@@ -14,9 +14,12 @@
 #                 Windows  NAME-VERSION-windows-ARCH.msi
 #
 # with a .sha256 beside each file. The applications are described in packaging/apps/*.conf; fsh
-# is packaged by its own scripts (tools/ in fsh). The servers (parley-servers) are one Linux
-# package, parley-servers (.deb, .rpm: /opt/parley/servers, a systemd service for each, not
-# enabled, settings in /etc/parley, run as the account parley), and one plain archive.
+# is packaged by its own scripts (tools/ in fsh). The servers (parley-servers) are a Linux
+# package (.deb, .rpm: /opt/parley/servers, a systemd service for each, not enabled, settings in
+# /etc/parley, run as the account parley), a macOS package (.pkg: /usr/local/lib/parley/servers,
+# a launchd daemon for each, not started) and one plain archive; the mail servers are one service,
+# parley-mail. parley-mail-admin (a war) is a Linux package (.deb, .rpm) that deploys it in the
+# system's Tomcat 10.1, and one plain archive with a script that deploys it in any Tomcat.
 #
 # Usage: packaging/package.sh [options] APP...       (APP: a name in packaging/apps, or all)
 #   --version V    the version (default: parley-parent's, without -SNAPSHOT)
@@ -216,11 +219,12 @@ write_readme() { # DIR how
 
 # A Java runtime with the modules Parley's applications use: all of Java SE, plus what is found
 # only at run time (elliptic curves for SSH, more encodings, every locale, zip file systems, DNS
-# through JNDI, sun.misc for JNA and the terminal libraries)
+# through JNDI, sun.misc for JNA and the terminal libraries, the JMX agent for the servers' remote
+# management: com.sun.management.jmxremote)
 make_runtime() { # DIR
 	local available modules=java.se m
 	available=$("$JAVA_HOME/bin/java$exe" --list-modules | sed 's/@.*//')
-	for m in jdk.crypto.ec jdk.charsets jdk.localedata jdk.zipfs jdk.naming.dns jdk.unsupported jdk.management jdk.crypto.cryptoki; do
+	for m in jdk.crypto.ec jdk.charsets jdk.localedata jdk.zipfs jdk.naming.dns jdk.unsupported jdk.management jdk.management.agent jdk.crypto.cryptoki; do
 		if echo "$available" | grep -qx "$m"; then
 			modules="$modules,$m"
 		fi
@@ -541,19 +545,28 @@ stage_servers() { # DIR
 	done
 	while IFS=: read -r n mod main prop; do
 		[ -n "$n" ] || continue
-		MODULE=$mod
-		stage_jars "$dir"
-		if "$JAVA_HOME/bin/javap$exe" -cp "$dir/lib/$MAIN_JAR" "$main" 2>/dev/null | grep -q 'public static void main(java.lang.String\[\])'; then
+		# (MODULE may be several, for a server process that runs several servers: parley-mail)
+		for m in $mod; do
+			MODULE=$m
+			stage_jars "$dir"
+		done
+		local cp="$dir/lib/*"
+		[ $platform = windows ] && cp="$(cygpath -w "$dir/lib")\\*"
+		if "$JAVA_HOME/bin/javap$exe" -cp "$cp" "$main" 2>/dev/null | grep -q 'public static void main(java.lang.String\[\])'; then
 			SERVERS_FOUND="$SERVERS_FOUND $n"
 		else
 			echo "  (left out: $main has no main method in this build)"
 		fi
 	done <<< "$SERVERS"
 	MODULE=$keep_module
+	mkdir -p "$dir/bin"
+	cp "$here/servers/parley-servers-setup" "$dir/bin/"
+	chmod 755 "$dir/bin/parley-servers-setup"
 }
 
 # bin/parley-NAME for each server: its settings file is CONF/parley-NAME.properties, CONF being
-# /etc/parley, or the folder of the file PARLEY_CONF names (as Parley's plugin folders)
+# /etc/parley, or the folder of the file PARLEY_CONF names (as Parley's plugin folders), and its
+# Java options CONF/parley-NAME.jvm when it is there (a java @argfile: JMX for parley-mail)
 write_server_launchers() { # DIR
 	local dir=$1 n mod main prop
 	mkdir -p "$dir/bin"
@@ -563,7 +576,8 @@ write_server_launchers() { # DIR
 #!/bin/sh
 # The Parley $n server ($full), run until it is stopped (systemd: parley-$n.service).
 # Its settings: /etc/parley/parley-$n.properties (or beside the file PARLEY_CONF names), and
-# -Dname=value arguments. Java: the runtime beside lib, else JAVA_HOME's, else the java on PATH.
+# -Dname=value arguments; its Java options: parley-$n.jvm there, one per line, when it is there.
+# Java: the runtime beside lib, else JAVA_HOME's, else the java on PATH.
 self=\$0
 while [ -L "\$self" ]; do
 	link=\$(readlink "\$self")
@@ -584,23 +598,45 @@ conf=/etc/parley
 [ -n "\$PARLEY_CONF" ] && conf=\$(dirname "\$PARLEY_CONF")
 settings=""
 [ -f "\$conf/parley-$n.properties" ] && settings="-D$prop=\$conf/parley-$n.properties"
-exec "\$java" $JAVA_OPTIONS \$JAVA_OPTS \$settings -cp "\$home/lib/*" $main "\$@"
+options=""
+[ -f "\$conf/parley-$n.jvm" ] && options="@\$conf/parley-$n.jvm"
+exec "\$java" $JAVA_OPTIONS \$options \$JAVA_OPTS \$settings -cp "\$home/lib/*" $main "\$@"
 SH
 		chmod 755 "$dir/bin/parley-$n"
 	done <<< "$SERVERS"
 }
 
-# CONF-relative settings files and systemd units, for the servers found
-write_server_files() { # ETC-PARLEY-DIR UNIT-DIR
-	local etc=$1 units=$2 n mod main prop title
+# The settings files for the servers found, in ETC-PARLEY-DIR: servers/parley-NAME.properties
+# and the files in servers/NAME.d (the mail servers' protocol files, users, aliases, Java
+# options), and SERVER_FILES: their names. Their service units: systemd in UNIT-DIR, and launchd
+# in LAUNCHD-DIR when it is given.
+write_server_files() { # ETC-PARLEY-DIR UNIT-DIR [LAUNCHD-DIR]
+	local etc=$1 units=$2 launchd=${3:-} n mod main prop title f
 	mkdir -p "$etc" "$units"
+	if [ -n "$launchd" ]; then mkdir -p "$launchd"; fi
+	SERVER_FILES=""
 	while IFS=: read -r n mod main prop; do
 		case " $SERVERS_FOUND " in *" $n "*) ;; *) continue ;; esac
-		cp "$here/servers/parley-$n.properties" "$etc/"
-		title=$(echo "$n" | tr '[:lower:]' '[:upper:]')
-		sed -e "s/@NAME@/$n/g" -e "s/@TITLE@/$title/g" -e "s/@MODULE@/$mod/g" \
+		for f in "$here/servers/parley-$n.properties" "$here/servers/$n.d"/*; do
+			[ -f "$f" ] || continue
+			cp "$f" "$etc/"
+			SERVER_FILES="$SERVER_FILES $(basename "$f")"
+		done
+		title=$(server_title "$n")
+		sed -e "s/@NAME@/$n/g" -e "s/@TITLE@/$title/g" -e "s/@MODULE@/${mod%% *}/g" \
 			"$here/servers/parley-servers.service.in" > "$units/parley-$n.service"
+		if [ -n "$launchd" ]; then
+			sed -e "s/@NAME@/$n/g" -e "s/@TITLE@/$title/g" \
+				"$here/servers/parley-servers.plist.in" > "$launchd/us.bringardner.parley.$n.plist"
+		fi
 	done <<< "$SERVERS"
+}
+
+server_title() { # NAME: for the units' descriptions
+	case $1 in
+	mail) echo "mail servers (SMTP, submission, IMAP, POP3)" ;;
+	*) echo "$(echo "$1" | tr '[:lower:]' '[:upper:]') server" ;;
+	esac
 }
 
 servers_readme() { # DIR how
@@ -616,6 +652,13 @@ servers_readme() { # DIR how
 			echo "  parley-$n"
 		done
 		echo
+		echo "parley-mail runs the mail servers (SMTP, submission, IMAP, POP3, and with a key store"
+		echo "their implicit TLS servers) in one process: parley-mail.properties first, then"
+		echo "parley-smtp.properties, parley-imap.properties and parley-pop3.properties. Its JMX (for"
+		echo "parley-mail-admin) is set in parley-mail.jvm: 127.0.0.1:9010, with the password in jmx/."
+		echo
+		echo "bin/parley-servers-setup makes the folders, copies etc/parley to the settings folder,"
+		echo "makes the JMX passwords and (--units systemd or launchd) the services; --help says how."
 		echo "Every server runs as the account that starts it (the packages' services: parley)."
 		echo "Source and documentation: https://github.com/parley-project"
 	} > "$1/README.txt"
@@ -631,8 +674,8 @@ package_servers_plain() {
 	dir=$work/plain/$name
 	stage_servers "$dir"
 	write_server_launchers "$dir"
-	write_server_files "$dir/etc/parley" "$dir/systemd"
-	servers_readme "$dir" "Needs Java 17 or later (java on PATH, or JAVA_HOME). etc/parley has the settings files and systemd the service units, both for /opt/parley/servers; the Linux packages install them."
+	write_server_files "$dir/etc/parley" "$dir/systemd" "$dir/launchd"
+	servers_readme "$dir" "Needs Java 17 or later (java on PATH, or JAVA_HOME). etc/parley has the settings files, systemd and launchd the service units; bin/parley-servers-setup puts them in place for this folder (sudo bin/parley-servers-setup --create-account --units systemd, or on macOS --units launchd)."
 	archive "$work/plain" "$name"
 }
 
@@ -645,20 +688,16 @@ linux_servers() {
 	make_runtime "$root_dir$opt/runtime"
 	write_server_files "$root_dir/etc/parley" "$root_dir/usr/lib/systemd/system"
 	chmod -R u=rwX,go=rX "$root_dir$opt"
-	local n units="" confs=""
+	local n f units="" confs=""
 	for n in $SERVERS_FOUND; do
 		units="$units parley-$n.service"
-		confs="$confs /etc/parley/parley-$n.properties"
 	done
-	# (the account the services run as, and the folders the settings files name, owned by it)
-	local setup='getent group parley > /dev/null || groupadd --system parley
-getent passwd parley > /dev/null || useradd --system --gid parley --home-dir /var/lib/parley --shell /usr/sbin/nologin --comment "Parley servers" parley
-for d in /var/lib/parley /var/lib/parley/mail /var/lib/parley/ftp /etc/parley/dns /etc/parley/dns/zones /etc/parley/ssh; do
-	mkdir -p "$d"
-	chown parley:parley "$d"
-done
-chmod 700 /etc/parley/ssh
-if [ -d /run/systemd/system ]; then systemctl daemon-reload || true; fi'
+	for f in $SERVER_FILES; do
+		confs="$confs /etc/parley/$f"
+	done
+	# (the account the services run as, its folders, the mail servers' JMX passwords: see the script)
+	local setup="$opt/bin/parley-servers-setup --create-account
+if [ -d /run/systemd/system ]; then systemctl daemon-reload || true; fi"
 	local reload='if [ -d /run/systemd/system ]; then systemctl daemon-reload || true; fi'
 
 	if command -v dpkg-deb > /dev/null 2>&1; then
@@ -753,6 +792,171 @@ SPEC
 	fi
 }
 
+# A macOS package: /usr/local/lib/parley/servers with its own Java runtime, and a postinstall
+# that runs parley-servers-setup for launchd (the account: the user logged in at the console;
+# settings /etc/parley, data /usr/local/var/parley, logs /usr/local/var/log/parley). The
+# daemons are made in /Library/LaunchDaemons but not started.
+macos_servers() {
+	local pkgroot=$work/pkgroot scripts=$work/pkg-scripts opt=/usr/local/lib/parley/servers
+	local dir=$pkgroot/servers
+	stage_servers "$dir"
+	write_server_launchers "$dir"
+	write_server_files "$dir/etc/parley" "$dir/systemd" "$dir/launchd"
+	rm -rf "$dir/systemd"
+	servers_readme "$dir" "It carries its own Java runtime (runtime): nothing else needs to be installed. The installer ran bin/parley-servers-setup --units launchd: the settings are in /etc/parley, the daemons in /Library/LaunchDaemons (not started)."
+	make_runtime "$dir/runtime"
+	chmod -R u=rwX,go=rX "$dir"
+	mkdir -p "$scripts"
+	cat > "$scripts/postinstall" <<SH
+#!/bin/sh
+# (the installer runs this as root)
+$opt/bin/parley-servers-setup --units launchd
+exit 0
+SH
+	chmod 755 "$scripts/postinstall"
+	local name=$NAME-$full-macos-$arch.pkg
+	pkgbuild --root "$pkgroot" --install-location /usr/local/lib/parley --scripts "$scripts" \
+		--identifier "us.bringardner.parley.$NAME" --version "$version" "$out/$name" > /dev/null
+	sum "$name"
+}
+
+# ---------------------------------------------------------------- a web application (war)
+
+# The war, the Tomcat context that deploys it, and bin/NAME-setup, which puts the context in a
+# Tomcat (found, or --catalina-base) and lets it at the settings folder (servers/NAME-setup)
+stage_war() { # DIR README-LINE
+	local dir=$1 war=$root/$MODULE/target/$MODULE.war
+	if [ ! -f "$war" ]; then
+		echo "package.sh: no $war: build all of Parley first (mvn install in parley-build)" >&2
+		exit 1
+	fi
+	mkdir -p "$dir/bin" "$dir/conf"
+	cp "$war" "$dir/"
+	# (NAME-setup fills in the war's path and the folders)
+	cp "$here/servers/$NAME.xml.in" "$dir/conf/$NAME.xml"
+	cp "$here/servers/$NAME-setup" "$dir/bin/"
+	chmod 755 "$dir/bin/$NAME-setup"
+	{
+		echo "$TITLE $full"
+		echo
+		echo "$DESCRIPTION."
+		echo
+		echo "$2"
+		echo
+		echo "bin/$NAME-setup finds the Tomcat (10.1 or later: Debian's and Ubuntu's tomcat10, Fedora's"
+		echo "and Amazon Linux's tomcat or tomcat10, Homebrew's tomcat@10, or --catalina-base DIR), puts"
+		echo "conf/$NAME.xml in its conf/Catalina/localhost (the war, and the folders: settings"
+		echo "/etc/parley, home /var/lib/parley/mail-admin), and lets a systemd Tomcat write to them and"
+		echo "join the group parley. --help says how. The pages are then at http://localhost:8080/$NAME/."
+		echo
+		echo "Install parley-servers first: the admin manages its parley-mail service over JMX (the"
+		echo "settings it makes tell the admin where). Without it the admin runs the mail servers itself."
+		echo
+		echo "Source and documentation: https://github.com/parley-project"
+	} > "$dir/README.txt"
+	[ -f "$root/$MODULE/LICENSE" ] && cp "$root/$MODULE/LICENSE" "$dir/" || cp "$build/LICENSE" "$dir/"
+}
+
+package_war_plain() {
+	if [ "$platform" != linux ] || [ "$arch" != x86_64 ]; then
+		echo "  (plain: the same on every platform, made on Linux x86-64)"
+		return
+	fi
+	local name=$NAME-$full dir
+	dir=$work/plain/$name
+	stage_war "$dir" "Needs a Tomcat 10.1 or later (Java 17 or later). Put this folder where it is to stay, run sudo bin/$NAME-setup (it finds the Tomcat, or give it --catalina-base), then restart Tomcat."
+	archive "$work/plain" "$name"
+}
+
+# A Linux package (no Java of its own: Tomcat's): the war in /usr/share/NAME, and a postinst
+# that runs NAME-setup for the system's Tomcat; removing it takes the context away again
+linux_war() {
+	local base=$work/linux root_dir share=/usr/share/$NAME
+	root_dir=$base/root
+	stage_war "$root_dir$share" "Installed by the package: bin/$NAME-setup has put it in the system's Tomcat."
+	chmod -R u=rwX,go=rX "$root_dir$share"
+	local setup="$share/bin/$NAME-setup || echo \"$NAME: run $share/bin/$NAME-setup when Tomcat 10.1 is installed\""
+	local unsetup="$share/bin/$NAME-setup --remove || true"
+
+	if command -v dpkg-deb > /dev/null 2>&1; then
+		local deb=$base/deb
+		cp -a "$root_dir" "$deb"
+		mkdir -p "$deb/DEBIAN"
+		cat > "$deb/DEBIAN/control" <<CTL
+Package: $NAME
+Version: $deb_version
+Architecture: all
+Maintainer: Tony Bringardner <tony.bringardner@gmail.com>
+Section: mail
+Priority: optional
+Installed-Size: $(du -sk "$root_dir" | cut -f1)
+Depends: tomcat10
+Recommends: parley-servers
+Homepage: https://github.com/parley-project
+Description: $TITLE
+ $DESCRIPTION. It is deployed in the system's Tomcat (tomcat10) at /$NAME, and manages the
+ parley-servers package's parley-mail service over JMX.
+CTL
+		printf '#!/bin/sh\nset -e\nif [ "$1" = configure ]; then\n%s\nfi\n' "$setup" > "$deb/DEBIAN/postinst"
+		printf '#!/bin/sh\nset -e\nif [ "$1" = remove ]; then\n%s\nfi\n' "$unsetup" > "$deb/DEBIAN/prerm"
+		chmod 755 "$deb/DEBIAN/postinst" "$deb/DEBIAN/prerm"
+		local name=${NAME}_${full}_all.deb
+		dpkg-deb --root-owner-group --build "$deb" "$out/$name" > /dev/null
+		sum "$name"
+	else
+		echo "  (no dpkg-deb: no .deb)"
+	fi
+
+	if command -v rpmbuild > /dev/null 2>&1; then
+		local rpm=$base/rpm
+		mkdir -p "$rpm/SPECS" "$rpm/RPMS"
+		cat > "$rpm/SPECS/$NAME.spec" <<SPEC
+Name: $NAME
+Version: $version
+Release: $rpm_release
+Summary: $TITLE
+License: Apache-2.0
+URL: https://github.com/parley-project
+Packager: Tony Bringardner <tony.bringardner@gmail.com>
+BuildArch: noarch
+AutoReqProv: no
+Requires: (tomcat10 or tomcat)
+Recommends: parley-servers
+
+%description
+$DESCRIPTION. It is deployed in the system's Tomcat (tomcat10 or tomcat) at /$NAME, and manages
+the parley-servers package's parley-mail service over JMX.
+
+%install
+mkdir -p %{buildroot}
+cp -a $root_dir/. %{buildroot}/
+
+%post
+$setup
+
+%preun
+if [ "\$1" = 0 ]; then
+	$unsetup
+fi
+
+%files
+%defattr(-,root,root,-)
+$share
+SPEC
+		rpmbuild --quiet -bb --target noarch \
+			--define "_topdir $rpm" --define "_build_id_links none" \
+			--define "debug_package %{nil}" --define "__os_install_post %{nil}" \
+			"$rpm/SPECS/$NAME.spec"
+		local built name
+		built=$(ls "$rpm"/RPMS/*/*.rpm)
+		name=$(basename "$built")
+		mv "$built" "$out/$name"
+		sum "$name"
+	else
+		echo "  (no rpmbuild: no .rpm)"
+	fi
+}
+
 # ---------------------------------------------------------------- each application
 
 for app in "${apps[@]}"; do
@@ -766,15 +970,26 @@ for app in "${apps[@]}"; do
 	# shellcheck source=/dev/null
 	. "$conf"
 	echo "== $NAME"
+	if [ -n "$MODULE" ] && [ ! -d "$root/$MODULE" ]; then
+		echo "  (left out: no $MODULE beside parley-build; packaging/checkout.sh clones it when it can)"
+		continue
+	fi
 	for t in $types; do
 		rm -rf "${work:?}"/*
 		case $KIND:$t in
 		servers:plain) package_servers_plain ;;
 		servers:installer)
+			case $platform in
+			linux) linux_servers ;;
+			macos) macos_servers ;;
+			*) echo "  (installer: the servers are packaged for Linux and macOS)" ;;
+			esac ;;
+		war:plain) package_war_plain ;;
+		war:installer)
 			if [ $platform = linux ]; then
-				linux_servers
+				if [ "$arch" = x86_64 ]; then linux_war; else echo "  (installer: the war's packages are made on Linux x86-64)"; fi
 			else
-				echo "  (installer: the servers are packaged for Linux only)"
+				echo "  (installer: the war is packaged for Linux; elsewhere, the plain archive's bin/$NAME-setup)"
 			fi ;;
 		*:plain) package_plain ;;
 		*:installer) package_installer ;;

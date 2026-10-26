@@ -1,8 +1,10 @@
 # The repositories the packaging builds, checked out beside parley-build (as on the developer's
 # machine, where the aggregator pom finds them as ../NAME):
 #
-#   FOLDER  REPOSITORY (in github.com/parley-project)  BRANCH
+#   FOLDER  REPOSITORY (in github.com/parley-project)  BRANCH  [optional]
 #
+# An optional repository is left out when it can't be cloned (one that isn't public, say): the
+# build and the packaging go on without it.
 # packaging/checkout.sh clones them; a workflow run can choose another branch for some of them
 # (its "branches" input: FOLDER=BRANCH ...), to build a branch before it is merged.
 swing-widgets                 swing-widgets                 master
@@ -21,6 +23,7 @@ parley-mail                   parley-mail                   release-2.0.0
 parley-pop3                   parley-pop3                   release-2.0.0
 parley-imap                   parley-imap                   release-2.0.0
 parley-smtp                   parley-smtp                   release-2.0.0
+parley-mail-admin             parley-mail-admin             release-2.0.0  optional
 parley-files-ftp              parley-files-ftp              release-2.0.0
 parley-files-sftp             parley-files-sftp             release-2.0.0
 parley-files-sftp-jsch        parley-files-sftp-jsch        release-2.0.0

@@ -1,0 +1,5 @@
+# The SMTP aliases (parley.mail.smtp.aliases in parley-smtp.properties):
+#   alias: member, member ...
+# e.g.  postmaster: tony
+#       sales@example.com: tony, jose@example.org
+# parley-mail-admin's Aliases page edits this file.

@@ -1,0 +1,181 @@
+#!/bin/sh
+# parley-servers-setup: make what the Parley servers need on this machine, from their folder (the
+# one this script is in, /opt/parley/servers in the Linux packages). It changes nothing that is
+# already there, so it can run again (the packages run it at every install and upgrade).
+#
+#   1. the account the services run as (--create-account: a system account, Linux)
+#   2. the folders: settings (CONF), data (DATA: the mail store, FTP), logs (LOGS)
+#   3. the settings files, copied from this folder's etc/parley into CONF unless CONF has them
+#      (the paths in them follow CONF, DATA and LOGS); the mail servers' files can be edited by
+#      the account's group, so that parley-mail-admin (in that group) can edit them
+#   4. the JMX password files of the parley-mail service (CONF/jmx), with a new password
+#   5. the services (--units systemd or launchd), not started: their units for this folder, the
+#      account and the folders above
+#
+# Usage: parley-servers-setup [options]
+#   --user U          the services' account (default parley; with --units launchd: the user
+#                     logged in at the console)
+#   --group G         its group (default: the account's own group)
+#   --conf DIR        the settings folder (default /etc/parley)
+#   --data DIR        the data folder (default /var/lib/parley; launchd: /usr/local/var/parley)
+#   --logs DIR        the logs folder (default /var/log/parley; launchd: /usr/local/var/log/parley)
+#   --units KIND      systemd, launchd or none (the default: the Linux packages install the units)
+#   --create-account  make the account and group when they don't exist (Linux: useradd)
+#   --root DIR        do it all below DIR (to see what it would make)
+#
+# Run it as root for the folders' owners and the units; as another user it makes what that user
+# may (a test install in your own folders, say), and doesn't change owners.
+
+set -e
+
+self=$0
+while [ -L "$self" ]; do
+	link=$(readlink "$self")
+	case $link in
+	/*) self=$link ;;
+	*) self=$(dirname "$self")/$link ;;
+	esac
+done
+home=$(cd "$(dirname "$self")/.." && pwd)
+
+user="" group="" conf=/etc/parley data="" logs="" units=none create=no root=""
+while [ $# -gt 0 ]; do
+	case $1 in
+	--user) user=$2; shift ;;
+	--group) group=$2; shift ;;
+	--conf) conf=$2; shift ;;
+	--data) data=$2; shift ;;
+	--logs) logs=$2; shift ;;
+	--units) units=$2; shift ;;
+	--create-account) create=yes ;;
+	--root) root=$2; shift ;;
+	-h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	*) echo "parley-servers-setup: unknown option $1 (--help)" >&2; exit 2 ;;
+	esac
+	shift
+done
+case $units in systemd|launchd|none) ;; *) echo "parley-servers-setup: --units is systemd, launchd or none" >&2; exit 2 ;; esac
+if [ "$units" = launchd ]; then
+	[ -n "$data" ] || data=/usr/local/var/parley
+	[ -n "$logs" ] || logs=/usr/local/var/log/parley
+	if [ -z "$user" ] && [ "$(uname -s)" = Darwin ]; then
+		user=$(stat -f%Su /dev/console 2> /dev/null || true)
+	fi
+	[ -n "$user" ] && [ "$user" != root ] || user=$(id -un)
+fi
+[ -n "$user" ] || user=parley
+[ -n "$data" ] || data=/var/lib/parley
+[ -n "$logs" ] || logs=/var/log/parley
+R=$root
+asroot=no
+[ "$(id -u)" = 0 ] && asroot=yes
+
+# ---------------------------------------------------------------- 1. the account
+
+if [ "$create" = yes ] && [ -z "$R" ]; then
+	getent group "${group:-$user}" > /dev/null 2>&1 || groupadd --system "${group:-$user}"
+	getent passwd "$user" > /dev/null 2>&1 || useradd --system --gid "${group:-$user}" --home-dir "$data" \
+		--shell /usr/sbin/nologin --comment "Parley servers" "$user"
+fi
+if [ -z "$group" ]; then
+	group=$(id -gn "$user" 2>/dev/null || echo "$user")
+fi
+
+own() { # OWNER:GROUP FILE...: when root (and the account exists)
+	if [ "$asroot" = yes ] && id "$user" > /dev/null 2>&1; then
+		chown "$@"
+	fi
+}
+
+# ---------------------------------------------------------------- 2. the folders
+
+# (setgid folders: what is made in them gets their group, the account's)
+for d in "$conf" "$conf/jmx" "$data" "$data/mail" "$data/mail/.parley-locks" "$data/ftp" "$logs" \
+		"$conf/dns" "$conf/dns/zones" "$conf/ssh"; do
+	mkdir -p "$R$d"
+done
+own "root:$group" "$R$conf"
+chmod 2775 "$R$conf"
+own "$user:$group" "$R$conf/jmx" "$R$data" "$R$data/mail" "$R$data/mail/.parley-locks" "$R$data/ftp" "$R$logs" \
+	"$R$conf/dns" "$R$conf/dns/zones" "$R$conf/ssh"
+chmod 750 "$R$conf/jmx"
+chmod 2750 "$R$data" "$R$data/mail" "$R$logs"
+chmod 2770 "$R$data/mail/.parley-locks"
+chmod 700 "$R$conf/ssh"
+
+# ---------------------------------------------------------------- 3. the settings files
+
+# (the templates name /etc/parley, /var/lib/parley, /var/log/parley and /opt/parley/servers)
+paths() {
+	sed -e "s#/etc/parley#$conf#g" -e "s#/var/lib/parley#$data#g" -e "s#/var/log/parley#$logs#g" \
+		-e "s#/opt/parley/servers#$home#g"
+}
+if [ -d "$home/etc/parley" ]; then
+	for f in "$home"/etc/parley/*; do
+		[ -f "$f" ] || continue
+		dest=$R$conf/$(basename "$f")
+		if [ ! -e "$dest" ]; then
+			paths < "$f" > "$dest"
+			echo "  made $conf/$(basename "$f")"
+		fi
+	done
+fi
+# (the mail servers' files: parley-mail-admin, in the group, edits them)
+for f in parley-mail.properties parley-smtp.properties parley-imap.properties parley-pop3.properties aliases.txt parley-mail.jvm; do
+	[ -f "$R$conf/$f" ] || continue
+	own "root:$group" "$R$conf/$f"
+	chmod 664 "$R$conf/$f"
+done
+if [ -f "$R$conf/users.txt" ]; then
+	own "root:$group" "$R$conf/users.txt"
+	chmod 660 "$R$conf/users.txt"
+fi
+
+# ---------------------------------------------------------------- 4. JMX passwords
+
+jmx=$R$conf/jmx
+if [ ! -f "$jmx/jmxremote.password" ]; then
+	pw=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | dd bs=24 count=1 2> /dev/null)
+	umask 077
+	printf 'parleyadmin %s\n' "$pw" > "$jmx/jmxremote.password"
+	printf '%s\n' "$pw" > "$jmx/admin.password"
+	printf 'parleyadmin readwrite\n' > "$jmx/jmxremote.access"
+	umask 022
+	echo "  made the JMX password files in $conf/jmx"
+fi
+# (Java requires the password file to be readable by the service's account only)
+own "$user:$group" "$jmx/jmxremote.password" "$jmx/jmxremote.access"
+chmod 600 "$jmx/jmxremote.password"
+chmod 640 "$jmx/jmxremote.access"
+own "root:$group" "$jmx/admin.password"
+chmod 640 "$jmx/admin.password"
+
+# ---------------------------------------------------------------- 5. the services
+
+units_for() { # the account, the group and the folders in a unit
+	paths | sed -e "s#^User=parley\$#User=$user#" -e "s#^Group=parley\$#Group=$group#" \
+		-e "/<key>UserName<\/key>/{n;s#<string>.*</string>#<string>$user</string>#;}" \
+		-e "/<key>GroupName<\/key>/{n;s#<string>.*</string>#<string>$group</string>#;}"
+}
+case $units in
+systemd)
+	mkdir -p "$R/etc/systemd/system"
+	for u in "$home"/systemd/*.service; do
+		[ -f "$u" ] || continue
+		units_for < "$u" > "$R/etc/systemd/system/$(basename "$u")"
+		echo "  made /etc/systemd/system/$(basename "$u") (not enabled: systemctl enable --now $(basename "$u" .service))"
+	done
+	if [ -z "$R" ] && [ -d /run/systemd/system ]; then systemctl daemon-reload || true; fi
+	;;
+launchd)
+	mkdir -p "$R/Library/LaunchDaemons"
+	for u in "$home"/launchd/*.plist; do
+		[ -f "$u" ] || continue
+		units_for < "$u" > "$R/Library/LaunchDaemons/$(basename "$u")"
+		chmod 644 "$R/Library/LaunchDaemons/$(basename "$u")"
+		echo "  made /Library/LaunchDaemons/$(basename "$u") (not started: sudo launchctl bootstrap system /Library/LaunchDaemons/$(basename "$u"))"
+	done
+	;;
+esac
+
+echo "parley-servers-setup: account $user:$group, settings $conf, data $data, logs $logs"

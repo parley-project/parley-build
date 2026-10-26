@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The Parley @TITLE@ (parley-@NAME@) as a launchd daemon. parley-servers-setup puts it in
+     /Library/LaunchDaemons with the account it runs as; start it with
+     sudo launchctl bootstrap system /Library/LaunchDaemons/us.bringardner.parley.@NAME@.plist -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>us.bringardner.parley.@NAME@</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/parley/servers/bin/parley-@NAME@</string>
+	</array>
+	<key>UserName</key>
+	<string>parley</string>
+	<key>GroupName</key>
+	<string>parley</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PARLEY_CONF</key>
+		<string>/etc/parley/parley.properties</string>
+	</dict>
+	<key>WorkingDirectory</key>
+	<string>/var/lib/parley</string>
+	<key>Umask</key>
+	<integer>23</integer>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>/var/log/parley/parley-@NAME@.out</string>
+	<key>StandardErrorPath</key>
+	<string>/var/log/parley/parley-@NAME@.out</string>
+</dict>
+</plist>

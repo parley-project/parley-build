@@ -1,0 +1,12 @@
+# Java options of the parley-mail service (bin/parley-mail reads this file: one option per line).
+# JMX, for parley-mail-admin: on this machine only (127.0.0.1), with a password. The package made
+# the password files in /etc/parley/jmx (jmxremote.password must be readable by the service's
+# account only); parley-mail.properties tells parley-mail-admin where to connect.
+-Dcom.sun.management.jmxremote.port=9010
+-Dcom.sun.management.jmxremote.rmi.port=9010
+-Dcom.sun.management.jmxremote.host=127.0.0.1
+-Djava.rmi.server.hostname=127.0.0.1
+-Dcom.sun.management.jmxremote.ssl=false
+-Dcom.sun.management.jmxremote.authenticate=true
+-Dcom.sun.management.jmxremote.password.file=/etc/parley/jmx/jmxremote.password
+-Dcom.sun.management.jmxremote.access.file=/etc/parley/jmx/jmxremote.access

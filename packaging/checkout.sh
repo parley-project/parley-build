@@ -20,7 +20,7 @@ fi
 overrides=" $* "
 github=${PARLEY_GITHUB:-https://github.com/parley-project}
 
-grep -v '^#' "$here/repos.txt" | while read -r folder repo branch; do
+grep -v '^#' "$here/repos.txt" | while read -r folder repo branch optional; do
 	[ -n "$folder" ] || continue
 	# (FOLDER=BRANCH on the command line wins)
 	for o in $overrides; do
@@ -29,8 +29,9 @@ grep -v '^#' "$here/repos.txt" | while read -r folder repo branch; do
 		esac
 	done
 	if [ -n "$heads" ]; then
-		sha=$(git ls-remote "$github/$repo.git" "refs/heads/$branch" | cut -f1)
+		sha=$(GIT_TERMINAL_PROMPT=0 git ls-remote "$github/$repo.git" "refs/heads/$branch" 2> /dev/null | cut -f1)
 		if [ -z "$sha" ]; then
+			[ "$optional" = optional ] && continue
 			echo "checkout.sh: $repo has no branch $branch" >&2
 			exit 1
 		fi
@@ -39,6 +40,12 @@ grep -v '^#' "$here/repos.txt" | while read -r folder repo branch; do
 		echo "$folder: already there, left as it is"
 	else
 		echo "$folder: $repo $branch"
-		git clone -q --depth 1 --branch "$branch" "$github/$repo.git" "$root/$folder"
+		if ! GIT_TERMINAL_PROMPT=0 git clone -q --depth 1 --branch "$branch" "$github/$repo.git" "$root/$folder"; then
+			if [ "$optional" = optional ]; then
+				echo "$folder: can't clone $repo: left out"
+				continue
+			fi
+			exit 1
+		fi
 	fi
 done

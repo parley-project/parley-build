@@ -151,7 +151,13 @@ jobs:
           test "$(/usr/bin/fsh -c 'echo smoke-ok')" = smoke-ok
           script -qec "pfv --help" /dev/null | grep -q usage
           id parley
-          systemctl cat parley-pop3.service > /dev/null
+          systemctl cat parley-mail.service > /dev/null
+          sudo test -f /etc/parley/jmx/jmxremote.password
+          sudo test -f /etc/parley/parley-mail.properties
+          # (parley-mail-admin needs Tomcat 10.1, which this Ubuntu doesn't have: its package is only looked at)
+          for f in parley-mail-admin_*.deb; do
+            if [ -f "$f" ]; then dpkg-deb -c "$f" | grep -q parley-mail-admin.war; fi
+          done
 
       - uses: actions/upload-artifact@v4
         with:

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- parley-mail-admin in this Tomcat (made by parley-mail-admin-setup): the war, and its folders.
+     The settings folder is the one the Parley servers read; the home has the admin's own files
+     (its log, the DKIM keys it makes). -->
+<Context docBase="@WAR@">
+	<Parameter name="parley.mail.admin.settingsDirectory" value="@CONF@" override="false"/>
+	<Parameter name="parley.mail.admin.home" value="@HOME@" override="false"/>
+</Context>

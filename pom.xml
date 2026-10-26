@@ -97,4 +97,20 @@
     <!-- The BOM lists the modules above, so it comes last -->
     <module>../parley-bom</module>
   </modules>
+
+  <profiles>
+    <!-- The mail servers' web administration (a war), when its folder is there: its repository may
+         not be one everyone can clone (packaging/checkout.sh leaves it out then) -->
+    <profile>
+      <id>parley-mail-admin</id>
+      <activation>
+        <file>
+          <exists>${project.basedir}/../parley-mail-admin/pom.xml</exists>
+        </file>
+      </activation>
+      <modules>
+        <module>../parley-mail-admin</module>
+      </modules>
+    </profile>
+  </profiles>
 </project>

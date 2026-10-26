@@ -1,0 +1,5 @@
+# The mail users (parley.mail.users in parley-mail.properties), in parley-net's FileBasedAcl format:
+#   name , password , permissions , parameters
+# e.g.  tony@example.com , {PBKDF2}... , READ|WRITE , maildrop=example.com/tony
+# parley-mail-admin's Users page edits this file (passwords are stored hashed); the servers read
+# it again when it changes. Make the first administrator on parley-mail-admin's first page.

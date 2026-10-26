@@ -11,7 +11,8 @@ silicon, Intel) and Windows, and puts the files on the pre-release `v2.0.0-previ
 | fsh-ide (Swing, JavaFX) | `fsh-ide-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `fsh-ide-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer (Swing, JavaFX) | `parley-files-viewer-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `parley-files-viewer-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer-tui (`pfv`, fsh's browser plugin) | `parley-files-viewer-tui-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | (built into the native fsh) |
-| parley-servers (DNS, FTP, SSH, POP3, IMAP, SMTP) | `parley-servers-V.zip`, `.tar.gz` | `.deb`, `.rpm` (Linux only) | |
+| parley-servers (DNS, FTP, SSH, and the mail servers: SMTP, submission, IMAP, POP3) | `parley-servers-V.zip`, `.tar.gz` | `.deb`, `.rpm` (Linux), `parley-servers-V-macos-ARCH.pkg` | |
+| parley-mail-admin (the mail servers' web administration, a war) | `parley-mail-admin-V.zip`, `.tar.gz` | `.deb`, `.rpm` (Linux, for the system's Tomcat 10.1) | |
 
 Every file has a `.sha256` beside it. Nothing is signed or notarized. JavaFX's jars are for one
 platform, so the window applications' plain archives are made on each; the others' once, on
@@ -30,21 +31,80 @@ Linux x86-64. The Linux packages' file names have `-` where their versions have 
 - **Windows** (`.msi`): `C:\Program Files\NAME`, with Start menu entries (group Parley). The
   installers don't change `PATH`.
 
-### The servers (`parley-servers`, Linux)
+### The servers (`parley-servers`)
 
-`/opt/parley/servers` with one launcher for each server (`bin/parley-dns`, `-ftp`, `-ssh`,
-`-pop3`, `-imap`, `-smtp`), its settings in `/etc/parley/parley-NAME.properties` (kept on upgrade),
-and a systemd service for each, `parley-NAME.service`, **installed but not enabled or started**:
+**Linux** (`.deb`, `.rpm`): `/opt/parley/servers` with a launcher for each server (`bin/parley-dns`,
+`-ftp`, `-ssh`, and `bin/parley-mail` for the mail servers), its settings in `/etc/parley` (kept on
+upgrade), and a systemd service for each, `parley-NAME.service`, **installed but not enabled or
+started**:
 
 ```sh
-sudo systemctl enable --now parley-pop3
+sudo systemctl enable --now parley-mail
 ```
 
 The services run as the account `parley` (made by the package), may use ports below 1024, and
-keep their data in `/var/lib/parley` (`mail`, `ftp`) and `/etc/parley` (`dns`, `ssh`). POP3, IMAP
-and SMTP share the mail store (`parley.mail.sharedStore=host`). A server without a `main` method
-in the build is left out (the SSH server's is on parley-ssh's branch `ssh-service`). DNS needs a
-zone file in `/etc/parley/dns/zones` before it starts.
+keep their data in `/var/lib/parley` (`mail`, `ftp`), their logs in `/var/log/parley`, and their
+settings in `/etc/parley` (`dns`, `ssh` too). A server without a `main` method in the build is
+left out (the SSH server's is on parley-ssh's branch `ssh-service`). DNS needs a zone file in
+`/etc/parley/dns/zones` before it starts.
+
+**macOS** (`.pkg`): `/usr/local/lib/parley/servers`, with a launchd daemon for each server in
+`/Library/LaunchDaemons` (`us.bringardner.parley.NAME.plist`), **made but not started**:
+
+```sh
+sudo launchctl bootstrap system /Library/LaunchDaemons/us.bringardner.parley.mail.plist
+```
+
+They run as the user logged in at the console when it was installed (macOS lets any user use ports
+below 1024), with the settings in `/etc/parley`, data in `/usr/local/var/parley` and logs in
+`/usr/local/var/log/parley`.
+
+**Plain archive**: unpack it where it is to stay, then `sudo bin/parley-servers-setup
+--create-account --units systemd` (Linux) or `--units launchd` (macOS) makes the same folders,
+settings and services for that folder; `--user`, `--conf`, `--data` and `--logs` choose others, and
+without `--units` it only makes the folders and settings (run `bin/parley-mail` yourself). The
+packages run the same script (`bin/parley-servers-setup --help`).
+
+#### The mail servers: one service
+
+`parley-mail` is parley-net's launcher (`ServerMain`) running the mail servers that
+`parley.servers` lists in `/etc/parley/parley-mail.properties`: `smtp`, `submission`,
+`submissions`, `imap`, `imaps`, `pop3` and `pop3s`, in one process, serving one mail store. A
+server whose port is 0 is off; the implicit TLS ones are off until they have a port and a key store.
+
+| `/etc/parley/` | |
+|---|---|
+| `parley-mail.properties` | What the mail servers share: `parley.servers`, the mail root, the users file, the TLS key store, logging; and where parley-mail-admin finds them |
+| `parley-smtp.properties`, `parley-imap.properties`, `parley-pop3.properties` | Each protocol's own settings, read after the shared file |
+| `users.txt`, `aliases.txt` | The users and the SMTP aliases |
+| `parley-mail.jvm` | Java options (a `java @argfile`): JMX on `127.0.0.1:9010` with a password |
+| `jmx/` | The JMX password files, made at install with a new password: `jmxremote.password` (the service's account only), `jmxremote.access`, `admin.password` (for parley-mail-admin) |
+
+The mail settings files and `/etc/parley` belong to the group `parley` and are group-writable, so
+parley-mail-admin (in that group) can edit them; the mail store and logs are group-readable.
+
+### The administration (`parley-mail-admin`)
+
+A war, deployed in a Tomcat 10.1 or later that is already installed. The Linux packages need the
+system's Tomcat (`tomcat10` on Debian and Ubuntu; `tomcat10` or `tomcat` on Fedora, RHEL and Amazon
+Linux): they put the war in `/usr/share/parley-mail-admin` and run its `bin/parley-mail-admin-setup`,
+which
+
+1. puts `conf/Catalina/localhost/parley-mail-admin.xml` in the Tomcat: the war, the settings folder
+   (`/etc/parley`, the servers') and the admin's home (`/var/lib/parley/mail-admin`)
+2. adds a systemd drop-in for the Tomcat service (`tomcat10.service.d/parley-mail-admin.conf`): it
+   may write to those folders (Debian's Tomcat may write only to its own) and is in the group
+   `parley`.
+
+Then `sudo systemctl restart tomcat10` (or `tomcat`), and the pages are at
+`http://localhost:8080/parley-mail-admin/`. With parley-servers installed, the admin manages the
+`parley-mail` service over JMX (the settings the servers' package made tell it where and with
+which password); without it, the admin runs the mail servers in Tomcat itself.
+
+Elsewhere (macOS with Homebrew's `tomcat@10`, a Tomcat of your own), unpack the plain archive where
+it is to stay and run `sudo bin/parley-mail-admin-setup` (it finds Homebrew's Tomcat, or give it
+`--catalina-base DIR`). `--remove` takes it out again; `--help` says the rest. Serve the pages over
+HTTPS (a Tomcat HTTPS connector, or a reverse proxy) before they are reachable from other machines.
 
 ## Running the scripts
 
@@ -57,6 +117,10 @@ packaging/package.sh all                      # plain archives and installers fo
 packaging/package.sh --types plain fsh-ide    # one kind, one application
 packaging/native.sh fsh fsh-ide               # native binaries (GraalVM as JAVA_HOME)
 ```
+
+parley-mail-admin is built (and packaged) when its folder is there: `checkout.sh` leaves it out
+when its repository can't be cloned (it is marked `optional` in `repos.txt`), and the aggregator
+builds it with the profile `parley-mail-admin` when `../parley-mail-admin` exists.
 
 `--version` and `--label` name the files (`--label preview.20261024` gives `2.0.0-preview.20261024`;
 the Linux packages' versions sort before `2.0.0`'s). The applications are described in `apps/*.conf`,
