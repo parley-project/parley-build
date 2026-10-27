@@ -154,6 +154,9 @@ jobs:
           systemctl cat parley-mail.service > /dev/null
           sudo test -f /etc/parley/jmx/jmxremote.password
           sudo test -f /etc/parley/parley-mail.properties
+          # (the store's and the queue's own settings; hostname and domains are left for the admin)
+          sudo grep -q '^sharing=host$' /var/lib/parley/mail/.parley-store.properties
+          sudo grep -q '^hostname=$' /var/lib/parley/mail/.smtp-queue/queue.properties
           # (parley-mail-admin needs Tomcat 10.1, which this Ubuntu doesn't have: its package is only looked at)
           for f in parley-mail-admin_*.deb; do
             if [ -f "$f" ]; then dpkg-deb -c "$f" | grep -q parley-mail-admin.war; fi

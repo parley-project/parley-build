@@ -1,4 +1,4 @@
-# The SMTP aliases (parley.mail.smtp.aliases in parley-smtp.properties):
+# The SMTP aliases (aliases in the mail queue's queue.properties):
 #   alias: member, member ...
 # e.g.  postmaster: tony
 #       sales@example.com: tony, jose@example.org

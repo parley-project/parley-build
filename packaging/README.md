@@ -76,12 +76,33 @@ server whose port is 0 is off; the implicit TLS ones are off until they have a p
 |---|---|
 | `parley-mail.properties` | What the mail servers share: `parley.servers`, the mail root, the users file, the TLS key store, logging; and where parley-mail-admin finds them |
 | `parley-smtp.properties`, `parley-imap.properties`, `parley-pop3.properties` | Each protocol's own settings, read after the shared file |
-| `users.txt`, `aliases.txt` | The users and the SMTP aliases |
+| `users.txt`, `aliases.txt` | The users and the SMTP aliases (the queue's `aliases` names the file) |
 | `parley-mail.jvm` | Java options (a `java @argfile`): JMX on `127.0.0.1:9010` with a password |
 | `jmx/` | The JMX password files, made at install with a new password: `jmxremote.password` (the service's account only), `jmxremote.access`, `admin.password` (for parley-mail-admin) |
 
 The mail settings files and `/etc/parley` belong to the group `parley` and are group-writable, so
 parley-mail-admin (in that group) can edit them; the mail store and logs are group-readable.
+
+The store and the queue carry their own settings, in the data folder, so the servers can't disagree
+about them (parley-mail's and parley-smtp's READMEs); `parley-servers-setup` makes both once:
+
+| `/var/lib/parley/mail/` | |
+|---|---|
+| `.parley-store.properties` | The store's: `sharing=host`, since the service's servers are several servers on one store |
+| `.smtp-queue/queue.properties` | The queue's (shared by `smtp`, `submission` and `submissions`): `hostname` and `domains` (both required), the aliases file, the smart host, DKIM keys |
+
+Each SMTP server needs its own hostname too (`parley.mail.smtp.hostname`,
+`parley.mail.submission.hostname`, `parley.mail.submissions.hostname` in `parley-smtp.properties`).
+None of them has a default (it isn't taken from the machine's name), so after installing, give them
+once and start the service:
+
+```sh
+sudo /opt/parley/servers/bin/parley-servers-setup --hostname mail.example.com --domains example.com
+sudo systemctl enable --now parley-mail
+```
+
+Until they are set, the setup script lists what is missing and the servers refuse to start, naming
+the setting. Running the script again only fills settings that are empty; it never changes a value.
 
 ### The administration (`parley-mail-admin`)
 
