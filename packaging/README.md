@@ -114,11 +114,13 @@ which
 1. puts `conf/Catalina/localhost/parley-mail-admin.xml` in the Tomcat: the war, the settings folder
    (`/etc/parley`, the servers') and the admin's home (`/var/lib/parley/mail-admin`)
 2. adds a systemd drop-in for the Tomcat service (`tomcat10.service.d/parley-mail-admin.conf`): it
-   may write to those folders (Debian's Tomcat may write only to its own) and is in the group
-   `parley`.
+   may write to those folders and to the mail store's and queue's own settings files
+   (`/var/lib/parley/mail/.parley-store.properties`, `/var/lib/parley/mail/.smtp-queue`), since
+   Debian's Tomcat may write only to its own, and is in the group `parley`
+3. restarts a running Tomcat service, so the drop-in applies (`--no-restart`: not; then
+   `sudo systemctl restart tomcat10`, or `tomcat`)
 
-Then `sudo systemctl restart tomcat10` (or `tomcat`), and the pages are at
-`http://localhost:8080/parley-mail-admin/`. With parley-servers installed, the admin manages the
+The pages are at `http://localhost:8080/parley-mail-admin/`. With parley-servers installed, the admin manages the
 `parley-mail` service over JMX (the settings the servers' package made tell it where and with
 which password); without it, the admin runs the mail servers in Tomcat itself.
 

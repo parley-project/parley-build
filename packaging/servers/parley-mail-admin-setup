@@ -9,11 +9,13 @@
 #   2. makes the admin's home (--home, default /var/lib/parley/mail-admin) for Tomcat's account
 #   3. puts the context, conf/Catalina/localhost/parley-mail-admin.xml, in the Tomcat: the war,
 #      the settings folder (--conf, default /etc/parley: the Parley servers') and the home
-#   4. for a systemd Tomcat: a drop-in that lets it write to those folders (Debian's Tomcat may
-#      write only to its own) and puts it in the servers' group (--group, default parley), which
-#      may edit the settings and read the mail store
+#   4. for a systemd Tomcat: a drop-in that lets it write to those folders and to the mail store's
+#      and the queue's own settings files (Debian's Tomcat may write only to its own), and puts it
+#      in the servers' group (--group, default parley), which may edit the settings and read the
+#      mail store; then a running Tomcat is restarted, so the drop-in applies (--no-restart: not)
 #
-# Then restart Tomcat; the pages are at http://localhost:8080/parley-mail-admin/.
+# The pages are at http://localhost:8080/parley-mail-admin/ (restart Tomcat yourself when it isn't
+# a systemd service, or with --no-restart).
 #
 # Usage: parley-mail-admin-setup [options]
 #   --catalina-base DIR  the Tomcat (its conf folder is DIR/conf)
@@ -23,6 +25,7 @@
 #   --conf DIR           the settings folder (default /etc/parley)
 #   --home DIR           the admin's home (default /var/lib/parley/mail-admin)
 #   --data DIR           the servers' data folder, for its lock folder (default /var/lib/parley)
+#   --no-restart         don't restart a running systemd Tomcat
 #   --remove             take the context and the drop-in away (the home and settings stay)
 #   --root DIR           do it all below DIR (to see what it would make)
 
@@ -39,7 +42,7 @@ done
 here=$(cd "$(dirname "$self")/.." && pwd)
 name=parley-mail-admin
 
-base="" service="" tuser="" group=parley conf=/etc/parley home=/var/lib/parley/mail-admin data=/var/lib/parley remove=no root=""
+base="" service="" tuser="" group=parley conf=/etc/parley home=/var/lib/parley/mail-admin data=/var/lib/parley remove=no root="" restart=yes
 while [ $# -gt 0 ]; do
 	case $1 in
 	--catalina-base) base=$2; shift ;;
@@ -50,6 +53,7 @@ while [ $# -gt 0 ]; do
 	--home) home=$2; shift ;;
 	--data) data=$2; shift ;;
 	--remove) remove=yes ;;
+	--no-restart) restart=no ;;
 	--root) root=$2; shift ;;
 	-h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	*) echo "$name-setup: unknown option $1 (--help)" >&2; exit 2 ;;
@@ -153,12 +157,14 @@ echo "  made $context"
 # ---------------------------------------------------------------- 4. the systemd drop-in
 
 if [ -n "$service" ]; then
-	paths="$conf $home"
-	[ -d "$R$data/mail/.parley-locks" ] && paths="$paths $data/mail/.parley-locks"
+	# (the store's and the queue's own settings files, edited on its Store and Queue tabs and by the
+	# Domains page; "-": a path not there yet is left out rather than stopping Tomcat)
+	paths="$conf $home -$data/mail/.parley-locks -$data/mail/.parley-store.properties -$data/mail/.smtp-queue"
 	mkdir -p "$R$dropin_dir"
 	cat > "$R$dropin" <<EOF
-# Made by $name-setup: $name (in this Tomcat) edits the Parley servers' settings in $conf,
-# keeps its own files in $home, and reads the mail store as a member of the group $group.
+# Made by $name-setup: $name (in this Tomcat) edits the Parley servers' settings in $conf and the
+# mail store's and queue's own settings files, keeps its own files in $home, and reads the mail
+# store as a member of the group $group.
 [Service]
 ReadWritePaths=$paths
 SupplementaryGroups=$group
@@ -166,7 +172,13 @@ EOF
 	chmod 644 "$R$dropin"
 	echo "  made $dropin"
 	reload
-	echo "$name-setup: deployed in $service ($tconf), as $tuser in the group $group: restart it (systemctl restart $service)"
+	if [ "$restart" = yes ] && [ -z "$R" ] && [ "$asroot" = yes ] && [ -d /run/systemd/system ] && systemctl is-active --quiet "$service"; then
+		# (the drop-in and the group apply only to a Tomcat started after them)
+		systemctl restart "$service"
+		echo "$name-setup: deployed in $service ($tconf), as $tuser in the group $group; restarted $service"
+	else
+		echo "$name-setup: deployed in $service ($tconf), as $tuser in the group $group: restart it (systemctl restart $service)"
+	fi
 else
 	echo "$name-setup: deployed in the Tomcat in $tconf (it runs as $tuser, who must be able to write $conf and $home): restart it"
 fi

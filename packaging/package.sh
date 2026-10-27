@@ -867,7 +867,7 @@ package_war_plain() {
 	fi
 	local name=$NAME-$full dir
 	dir=$work/plain/$name
-	stage_war "$dir" "Needs a Tomcat 10.1 or later (Java 17 or later). Put this folder where it is to stay, run sudo bin/$NAME-setup (it finds the Tomcat, or give it --catalina-base), then restart Tomcat."
+	stage_war "$dir" "Needs a Tomcat 10.1 or later (Java 17 or later). Put this folder where it is to stay, run sudo bin/$NAME-setup (it finds the Tomcat, or give it --catalina-base; it restarts a systemd Tomcat, restart any other yourself)."
 	archive "$work/plain" "$name"
 }
 
