@@ -83,8 +83,9 @@
     <module>../parley-dap</module>
     <module>../parley-loupe</module>
 
-    <!-- fsh (groupId us.bringardner). It must be in this build: the viewer and the console depend
-         on it, and without it Maven uses whatever fsh is in ~/.m2. -->
+    <!-- fsh (groupId us.bringardner). It must be in this build: the viewer, the console and the
+         Lanterna browser plugin depend on it, and without it Maven uses whatever fsh is in ~/.m2.
+         fsh builds parley-files-viewer-tui's browser in; the reactor orders those modules. -->
     <module>../fsh</module>
     <module>../fsh-loupe</module>
 

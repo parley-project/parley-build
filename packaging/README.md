@@ -10,7 +10,7 @@ silicon, Intel) and Windows, and puts the files on the pre-release `v2.0.0-previ
 | fsh | `fsh-V.zip`, `.tar.gz` | fsh's own: `.deb`, `.rpm`, `.dmg`, `.msi`, and `fsh-V-PLATFORM-ARCH-jvm.tar.gz` | `fsh-V-PLATFORM-ARCH.tar.gz` (`.zip`), with the terminal browser built in |
 | fsh-ide (Swing, JavaFX) | `fsh-ide-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `fsh-ide-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer (Swing, JavaFX) | `parley-files-viewer-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `parley-files-viewer-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
-| parley-files-viewer-tui (`pfv`, fsh's browser plugin) | `parley-files-viewer-tui-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | (built into the native fsh) |
+| parley-files-viewer-tui (`pfv`; fsh has the same browser built in) | `parley-files-viewer-tui-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | (part of fsh, native too) |
 | parley-servers (DNS, FTP, SSH, and the mail servers: SMTP, submission, IMAP, POP3) | `parley-servers-V.zip`, `.tar.gz` | `.deb`, `.rpm` (Linux), `parley-servers-V-macos-ARCH.pkg` | |
 | parley-mail-admin (the mail servers' web administration, a war) | `parley-mail-admin-V.zip`, `.tar.gz` | `.deb`, `.rpm` (Linux, for the system's Tomcat 10.1) | |
 
@@ -22,12 +22,10 @@ Linux x86-64. The Linux packages' file names have `-` where their versions have 
 ## What the installers install
 
 - **Linux** (`.deb`, `.rpm`): `/opt/parley/NAME` (`bin`, `lib`, `runtime`), the commands in
-  `/usr/bin`, a menu entry for each window application. `pfv`'s package also links its jar into
-  fsh's system plugin folder, `/usr/local/lib/parley/fsh/plugins`, so fsh has `browse`, `view`,
-  `edit` and `search`. fsh's own packages install `/opt/fsh` and `/usr/bin/fsh` (in `/etc/shells`).
+  `/usr/bin`, a menu entry for each window application. fsh's own packages install `/opt/fsh` and `/usr/bin/fsh` (in `/etc/shells`).
 - **macOS**: the window applications as a `.dmg` (an application to drag to Applications, with
   the Swing launcher as its main one and the JavaFX one beside it); `pfv` as a `.pkg`
-  (`/usr/local/lib/parley/parley-files-viewer-tui`, `/usr/local/bin/pfv`, and the plugin link).
+  (`/usr/local/lib/parley/parley-files-viewer-tui`, `/usr/local/bin/pfv`).
 - **Windows** (`.msi`): `C:\Program Files\NAME`, with Start menu entries (group Parley). The
   installers don't change `PATH`.
 

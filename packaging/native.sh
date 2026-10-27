@@ -3,8 +3,8 @@
 # in parley-build first, with GraalVM as JAVA_HOME):
 #
 #   fsh                   FSH-VERSION-PLATFORM-ARCH.tar.gz (.zip on Windows): fsh's build-native
-#                         --builtin, with the terminal file browser (parley-files-viewer-tui) built
-#                         in, packaged by fsh's tools/package-native
+#                         (the terminal file browser, parley-files-viewer-tui, is part of fsh),
+#                         packaged by fsh's tools/package-native
 #   fsh-ide               NAME-VERSION-PLATFORM-ARCH-native.tar.gz (.zip on Windows): the module's -Pnative
 #   parley-files-viewer   build, with the JDK libraries it loads and lib/fontconfig.bfc
 #
@@ -62,17 +62,13 @@ sum() { # FILE in $out
 }
 
 native_fsh() {
-	local fsh=$root/fsh plugin
-	# shellcheck disable=SC2010
-	plugin=$(ls "$root"/parley-files-viewer-tui/parley-files-viewer-tui/target/parley-files-viewer-tui-*.jar \
-		| grep -v -e '-all\.jar' -e '-sources\.jar' | head -1)
-	[ -n "$plugin" ] || { echo "native.sh: no parley-files-viewer-tui jar: build all of Parley first" >&2; exit 1; }
+	local fsh=$root/fsh
 	rm -rf "$fsh/dist"
 	if [ $platform = windows ]; then
-		(cd "$fsh" && cmd //c 'windows\compile.cmd' && FSH_PLUGINS=$(cygpath -w "$plugin") cmd //c 'windows\build-native.cmd --builtin')
+		(cd "$fsh" && cmd //c 'windows\compile.cmd' && cmd //c 'windows\build-native.cmd')
 		(cd "$fsh" && pwsh -NoProfile -ExecutionPolicy Bypass -File tools/package-native.ps1 -Arch "$arch" -Version "$full")
 	else
-		(cd "$fsh" && sh "$platform/compile.sh" && FSH_PLUGINS=$plugin sh "$platform/build-native.sh" --builtin)
+		(cd "$fsh" && sh "$platform/compile.sh" && sh "$platform/build-native.sh")
 		(cd "$fsh" && sh tools/package-native.sh "$platform" "$arch" "$full")
 	fi
 	local f
