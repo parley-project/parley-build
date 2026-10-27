@@ -1,0 +1,18 @@
+[Unit]
+Description=Parley health check (bin/parley-health)
+Documentation=https://github.com/parley-project/parley-build
+After=network-online.target parley-mail.service
+
+[Service]
+Type=oneshot
+User=parley
+Group=parley
+Environment=PARLEY_CONF=/etc/parley/parley.properties
+Environment=PARLEY_HEALTH_STATE=/var/lib/parley/health
+ExecStart=/opt/parley/servers/bin/parley-health
+# (a problem found is exit 1: it's reported, not a failure of the unit)
+SuccessExitStatus=1
+UMask=0027
+NoNewPrivileges=true
+StandardOutput=journal
+StandardError=journal

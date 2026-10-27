@@ -104,6 +104,26 @@ sudo systemctl enable --now parley-mail
 Until they are set, the setup script lists what is missing and the servers refuse to start, naming
 the setting. Running the script again only fills settings that are empty; it never changes a value.
 
+#### The health check
+
+`bin/parley-health` checks this machine's Parley servers and mails an alert when that changes (a
+problem found, or every problem gone), not at every run: the systemd units in
+`parley.health.services` are active, the ports in `parley.health.ports` answer, the file systems of
+the mail root and the logs are under `parley.health.diskPercent` (80) full, no message has waited
+in the SMTP queue over `parley.health.queueMinutes` (60), and the certificate on
+`parley.health.certPort` expires in more than `parley.health.certDays` (30) days. Its settings are
+`/etc/parley/parley-health.properties`; the alerts go to `parley.health.alertTo` from
+`parley.health.alertFrom` through this machine's relay (`parley.health.smtp`, 127.0.0.1:25), so use
+an address on another server. On systemd, `parley-health.timer` runs it every 5 minutes, as the
+account `parley`; it isn't enabled by the package:
+
+```sh
+sudo /opt/parley/servers/bin/parley-servers-setup --alert-to you@example.org --alert-from postmaster@example.com
+sudo systemctl enable --now parley-health.timer
+journalctl -u parley-health        # every run's result
+sudo -u parley /opt/parley/servers/bin/parley-health --test   # a test alert
+```
+
 ### The administration (`parley-mail-admin`)
 
 A war, deployed in a Tomcat 10.1 or later that is already installed. The Linux packages need the

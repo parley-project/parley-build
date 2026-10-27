@@ -13,8 +13,10 @@
 #      sharing=host, DATA/mail/.smtp-queue/queue.properties), and with --hostname each SMTP
 #      server's hostname in CONF/parley-smtp.properties; without --hostname and --domains the
 #      mail servers don't start until they are set (the script says which)
-#   6. the services (--units systemd or launchd), not started: their units for this folder, the
-#      account and the folders above
+#   6. the health check's settings (CONF/parley-health.properties): with --alert-to and
+#      --alert-from, where its alerts go and who they are from; and its state folder
+#   7. the services (--units systemd or launchd), not started: their units for this folder, the
+#      account and the folders above (on systemd also parley-health.timer, not enabled)
 #
 # Usage: parley-servers-setup [options]
 #   --user U          the services' account (default parley; with --units launchd: the user
@@ -28,6 +30,8 @@
 #   --hostname NAME   the mail servers' name (the PTR record of the server's address): the queue's
 #                     hostname and each SMTP server's (smtp, submission, submissions)
 #   --domains LIST    the local mail domains, comma separated (the queue's domains)
+#   --alert-to LIST   where the health check's alerts go (an address on another server)
+#   --alert-from ADDR who they are from (an address this server may send as)
 #   --root DIR        do it all below DIR (to see what it would make)
 #
 # Run it as root for the folders' owners and the units; as another user it makes what that user
@@ -45,7 +49,7 @@ while [ -L "$self" ]; do
 done
 home=$(cd "$(dirname "$self")/.." && pwd)
 
-user="" group="" conf=/etc/parley data="" logs="" units=none create=no root="" hostname="" domains=""
+user="" group="" conf=/etc/parley data="" logs="" units=none create=no root="" hostname="" domains="" alert_to="" alert_from=""
 while [ $# -gt 0 ]; do
 	case $1 in
 	--user) user=$2; shift ;;
@@ -57,6 +61,8 @@ while [ $# -gt 0 ]; do
 	--create-account) create=yes ;;
 	--hostname) hostname=$2; shift ;;
 	--domains) domains=$2; shift ;;
+	--alert-to) alert_to=$2; shift ;;
+	--alert-from) alert_from=$2; shift ;;
 	--root) root=$2; shift ;;
 	-h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	*) echo "parley-servers-setup: unknown option $1 (--help)" >&2; exit 2 ;;
@@ -234,7 +240,21 @@ if [ -f "$R$conf/parley-mail.properties" ]; then
 	fi
 fi
 
-# ---------------------------------------------------------------- 6. the services
+# ---------------------------------------------------------------- 6. the health check
+
+mkdir -p "$R$data/health"
+own "$user:$group" "$R$data/health"
+chmod 750 "$R$data/health"
+health=$R$conf/parley-health.properties
+if [ -f "$health" ]; then
+	own "root:$group" "$health"
+	chmod 664 "$health"
+	# (only where empty or commented out, as for the mail settings above)
+	[ -n "$alert_to" ] && fill parley.health.alertTo "$alert_to" "$health" "$conf/parley-health.properties"
+	[ -n "$alert_from" ] && fill parley.health.alertFrom "$alert_from" "$health" "$conf/parley-health.properties"
+fi
+
+# ---------------------------------------------------------------- 7. the services
 
 units_for() { # the account, the group and the folders in a unit
 	paths | sed -e "s#^User=parley\$#User=$user#" -e "s#^Group=parley\$#Group=$group#" \
@@ -244,7 +264,7 @@ units_for() { # the account, the group and the folders in a unit
 case $units in
 systemd)
 	mkdir -p "$R/etc/systemd/system"
-	for u in "$home"/systemd/*.service; do
+	for u in "$home"/systemd/*.service "$home"/systemd/*.timer; do
 		[ -f "$u" ] || continue
 		units_for < "$u" > "$R/etc/systemd/system/$(basename "$u")"
 		echo "  made /etc/systemd/system/$(basename "$u") (not enabled: systemctl enable --now $(basename "$u" .service))"

@@ -1,0 +1,216 @@
+#!/bin/sh
+# parley-health: check that this machine's Parley servers are healthy, and mail an alert when that
+# changes (a problem found, or every problem gone), not at every run. The systemd timer
+# parley-health.timer runs it every 5 minutes (parley-health.service, as the account parley).
+# Every run writes what it found to its output (the journal: journalctl -u parley-health).
+#
+# It checks, as CONF/parley-health.properties says (CONF: /etc/parley, or the folder of the file
+# PARLEY_CONF names):
+#   1. the services:  each systemd unit in parley.health.services is active
+#   2. the ports:     each port in parley.health.ports answers on this machine
+#   3. the disk:      the file systems of the mail root and the logs are under parley.health.diskPercent
+#   4. the queue:     no message has waited in the SMTP queue longer than parley.health.queueMinutes
+#   5. the certificate: the one on port parley.health.certPort expires in more than
+#                     parley.health.certDays days
+#
+# Alerts go from parley.health.alertFrom to parley.health.alertTo (comma separated) through the SMTP
+# server at parley.health.smtp (default 127.0.0.1:25: this machine's relay, which must let this
+# machine relay, as parley.mail.smtp.relayNetworks=127.0.0.1/32 does). Without alertTo it only
+# writes to its output. Send alerts to an address on another server: one on this one is no use
+# when this one is the problem.
+#
+# Usage: parley-health [--test]   (--test: send a test alert, whatever the state)
+# Exit status: 0 healthy, 1 a problem found, 2 the settings are wrong.
+
+set -u
+# (run as parley from someone's home it can't read, find would complain on every run)
+cd / || exit 2
+
+conf_file=${PARLEY_CONF:-/etc/parley/parley.properties}
+conf=$(dirname "$conf_file")
+settings=$conf/parley-health.properties
+state_dir=${PARLEY_HEALTH_STATE:-/var/lib/parley/health}
+test_alert=no
+[ "${1:-}" = --test ] && test_alert=yes
+
+# ---------------------------------------------------------------- settings
+
+prop() { # FILE KEY [DEFAULT]: a value from a properties file (the last one wins, as in Java); the
+	# default only when the key isn't there at all, so "KEY=" turns a check off
+	k=$(printf '%s' "$2" | sed 's/\./\\./g')
+	if [ -r "$1" ] && grep -q "^[[:space:]]*$k[[:space:]]*[=:]" "$1"; then
+		sed -n "s/^[[:space:]]*$k[[:space:]]*[=:][[:space:]]*//p" "$1" | tail -1 | sed 's/[[:space:]]*$//'
+	else
+		printf '%s' "${3:-}"
+	fi
+}
+
+if [ ! -r "$settings" ]; then
+	echo "parley-health: can't read $settings" >&2
+	exit 2
+fi
+name=$(prop "$settings" parley.health.name "$(uname -n)")
+alert_to=$(prop "$settings" parley.health.alertTo)
+alert_from=$(prop "$settings" parley.health.alertFrom)
+smtp=$(prop "$settings" parley.health.smtp 127.0.0.1:25)
+services=$(prop "$settings" parley.health.services parley-mail)
+ports=$(prop "$settings" parley.health.ports)
+disk_percent=$(prop "$settings" parley.health.diskPercent 80)
+queue_minutes=$(prop "$settings" parley.health.queueMinutes 60)
+cert_port=$(prop "$settings" parley.health.certPort)
+cert_days=$(prop "$settings" parley.health.certDays 30)
+if [ -n "$alert_to" ] && [ -z "$alert_from" ]; then
+	echo "parley-health: parley.health.alertFrom isn't set in $settings (alerts need a sender)" >&2
+	exit 2
+fi
+
+mail_props=$conf/parley-mail.properties
+mail_root=$(prop "$mail_props" parley.mail.root)
+queue=$(prop "$conf/parley-smtp.properties" parley.mail.smtp.queue "$(prop "$mail_props" parley.mail.smtp.queue .smtp-queue)")
+logs=/var/log/parley
+log_file=$(prop "$mail_props" logFile)
+[ -n "$log_file" ] && logs=$(dirname "$log_file")
+
+# ---------------------------------------------------------------- the checks
+
+problems=""
+notes=""
+problem() { problems="$problems
+- $*"; }
+note() { notes="$notes
+- $*"; }
+
+# 1. the services
+for u in $(echo "$services" | tr ',' ' '); do
+	s=$(systemctl is-active "$u" 2> /dev/null)
+	if [ "$s" = active ]; then
+		note "$u is active"
+	else
+		problem "$u is ${s:-not known} (systemctl status $u)"
+	fi
+done
+
+# 2. the ports
+for p in $(echo "$ports" | tr ',' ' '); do
+	if timeout 5 bash -c "exec 3<> /dev/tcp/127.0.0.1/$p" 2> /dev/null || (command -v nc > /dev/null && nc -z -w 5 127.0.0.1 "$p" 2> /dev/null); then
+		note "port $p answers"
+	else
+		problem "port $p doesn't answer"
+	fi
+done
+
+# 3. the disk
+for d in "$mail_root" "$logs"; do
+	[ -n "$d" ] && [ -e "$d" ] || continue
+	used=$(df -P "$d" | awk 'NR == 2 { sub(/%/, "", $5); print $5 }')
+	[ -n "$used" ] || continue
+	if [ "$used" -ge "$disk_percent" ]; then
+		problem "the disk of $d is $used% full (limit $disk_percent%)"
+	else
+		note "the disk of $d is $used% full"
+	fi
+done
+
+# 4. the queue: the oldest message (each is ID.eml beside ID.env in the queue's folder)
+if [ -n "$mail_root" ]; then
+	qdir=$mail_root/${queue#./}
+	if [ -d "$qdir" ]; then
+		waiting=$(find "$qdir" -maxdepth 1 -name '*.eml' ! -name '.*' | wc -l | tr -d ' ')
+		old=$(find "$qdir" -maxdepth 1 -name '*.eml' ! -name '.*' -mmin +"$queue_minutes" | wc -l | tr -d ' ')
+		if [ "$old" -gt 0 ]; then
+			problem "$old of the $waiting message(s) in the queue ($qdir) have waited over $queue_minutes minutes"
+		else
+			note "the queue has $waiting message(s), none waiting over $queue_minutes minutes"
+		fi
+	else
+		problem "the queue's folder $qdir isn't there (or this account can't read it)"
+	fi
+fi
+
+# 5. the certificate
+if [ -n "$cert_port" ]; then
+	end=$(echo | timeout 15 openssl s_client -connect "127.0.0.1:$cert_port" 2> /dev/null | openssl x509 -noout -enddate 2> /dev/null | sed 's/^notAfter=//')
+	if [ -z "$end" ]; then
+		problem "no certificate on port $cert_port (TLS doesn't answer)"
+	else
+		end_s=$(date -d "$end" +%s 2> /dev/null || echo 0)
+		left=$(( (end_s - $(date +%s)) / 86400 ))
+		if [ "$left" -lt "$cert_days" ]; then
+			problem "the certificate on port $cert_port expires in $left day(s), on $end"
+		else
+			note "the certificate on port $cert_port expires in $left days"
+		fi
+	fi
+fi
+
+# ---------------------------------------------------------------- the result
+
+if [ -z "$problems" ]; then
+	status=healthy
+	echo "parley-health: $name is healthy$notes"
+else
+	status=problem
+	echo "parley-health: $name has problems:$problems"
+fi
+
+send() { # SUBJECT BODY
+	[ -n "$alert_to" ] || return 0
+	if ! command -v curl > /dev/null; then
+		echo "parley-health: can't send the alert: no curl" >&2
+		return 1
+	fi
+	msg=$(mktemp)
+	{
+		printf 'From: Parley health <%s>\r\n' "$alert_from"
+		printf 'To: %s\r\n' "$alert_to"
+		printf 'Subject: %s\r\n' "$1"
+		printf 'Date: %s\r\n' "$(LC_ALL=C date -R)"
+		printf 'Message-ID: <parley-health.%s.%s@%s>\r\n' "$(date +%s)" "$$" "${alert_from#*@}"
+		printf 'Content-Type: text/plain; charset=utf-8\r\n\r\n'
+		printf '%s\n' "$2" | sed 's/$/\r/'
+	} > "$msg"
+	rcpts=""
+	for r in $(echo "$alert_to" | tr ',' ' '); do
+		rcpts="$rcpts --mail-rcpt $r"
+	done
+	# shellcheck disable=SC2086
+	if curl -sS --max-time 60 --url "smtp://$smtp" --mail-from "$alert_from" $rcpts --upload-file "$msg"; then
+		echo "parley-health: sent the alert to $alert_to"
+		rm -f "$msg"
+	else
+		echo "parley-health: can't send the alert through $smtp" >&2
+		rm -f "$msg"
+		return 1
+	fi
+}
+
+# (an alert only when the state changes: the problems found last time are in the state file)
+mkdir -p "$state_dir" 2> /dev/null
+state=$state_dir/last
+before=$(cat "$state" 2> /dev/null || echo "healthy")
+now=$status
+[ "$status" = problem ] && now="problem$problems"
+when=$(date -u '+%Y-%m-%d %H:%M UTC')
+if [ "$test_alert" = yes ]; then
+	send "[parley-health] $name: test alert" "A test alert from parley-health on $name, $when. Now: $status.
+${problems:+Problems:$problems
+}Checked:$notes"
+elif [ "$now" != "$before" ]; then
+	if [ "$status" = problem ]; then
+		subject="[parley-health] $name: PROBLEM"
+		body="parley-health found problems on $name at $when:
+$problems
+
+Also checked:$notes
+
+You get another mail when these change or are all gone."
+	else
+		subject="[parley-health] $name: all clear"
+		body="Every check passes again on $name at $when:$notes"
+	fi
+	if send "$subject" "$body"; then
+		printf '%s' "$now" > "$state"
+	fi
+fi
+
+[ "$status" = healthy ]
