@@ -99,6 +99,25 @@ sudo /opt/parley/servers/bin/parley-servers-setup --hostname mail.example.com --
 sudo systemctl enable --now parley-mail
 ```
 
+##### A store that several machines share
+
+The mail store can be on any of Parley's file systems instead of the local disk; the package has
+the database one (parley-files-jdbc, and MySQL's driver), for machines that all serve the same
+mail. `parley-mail.properties` names the file system and gives its connection settings, each
+`parley.mail.fileSource.KEY` being the file system's setting `KEY`, a secret as a reference:
+
+```properties
+parley.mail.root=/mail
+parley.mail.fileSource=Jdbc
+parley.mail.fileSource.jdbcUrl=jdbc:mysql://db.example.com:3306/file_source
+parley.mail.fileSource.jdbcUser=parley
+parley.mail.fileSource.jdbcPassword=@file:/etc/parley/store.secret
+```
+
+(or `parley.mail.root` is one `filesource:` URL with them all). The store's and the queue's own
+settings are then in that store, not in `/var/lib/parley/mail`, with `sharing=cluster` (servers
+on several machines); `parley-servers-setup` makes them only on the local disk so far.
+
 Until they are set, the setup script lists what is missing and the servers refuse to start, naming
 the setting. Running the script again only fills settings that are empty; it never changes a value.
 
