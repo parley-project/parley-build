@@ -9,10 +9,15 @@
 #      (the paths in them follow CONF, DATA and LOGS); the mail servers' files can be edited by
 #      the account's group, so that parley-mail-admin (in that group) can edit them
 #   4. the JMX password files of the parley-mail service (CONF/jmx), with a new password
-#   5. the mail store's and the mail queue's own settings (DATA/mail/.parley-store.properties with
-#      sharing=host, DATA/mail/.smtp-queue/queue.properties), and with --hostname each SMTP
+#   5. the mail store's and the mail queue's own settings (.parley-store.properties in the store,
+#      with sharing=host, and .smtp-queue/queue.properties), and with --hostname each SMTP
 #      server's hostname in CONF/parley-smtp.properties; without --hostname and --domains the
-#      mail servers don't start until they are set (the script says which)
+#      mail servers don't start until they are set (the script says which). The store is DATA/mail
+#      on this disk, or, when parley-mail.properties puts it on another file system
+#      (parley.mail.fileSource and its parley.mail.fileSource.* connection settings, or a
+#      filesource: URL as parley.mail.root, such as a database several servers share), that
+#      store, where the two files are made through parley-mail's StoreSetup (with Java), with
+#      sharing=cluster
 #   6. the services (--units systemd or launchd), not started: their units for this folder, the
 #      account and the folders above
 #
@@ -28,6 +33,8 @@
 #   --hostname NAME   the mail servers' name (the PTR record of the server's address): the queue's
 #                     hostname and each SMTP server's (smtp, submission, submissions)
 #   --domains LIST    the local mail domains, comma separated (the queue's domains)
+#   --sharing MODE    the store's sharing when its settings are made: off, host or cluster (default
+#                     host for a store on this disk, cluster for one on another file system)
 #   --root DIR        do it all below DIR (to see what it would make)
 #
 # Run it as root for the folders' owners and the units; as another user it makes what that user
@@ -45,7 +52,7 @@ while [ -L "$self" ]; do
 done
 home=$(cd "$(dirname "$self")/.." && pwd)
 
-user="" group="" conf=/etc/parley data="" logs="" units=none create=no root="" hostname="" domains=""
+user="" group="" conf=/etc/parley data="" logs="" units=none create=no root="" hostname="" domains="" sharing=""
 while [ $# -gt 0 ]; do
 	case $1 in
 	--user) user=$2; shift ;;
@@ -57,6 +64,7 @@ while [ $# -gt 0 ]; do
 	--create-account) create=yes ;;
 	--hostname) hostname=$2; shift ;;
 	--domains) domains=$2; shift ;;
+	--sharing) sharing=$2; shift ;;
 	--root) root=$2; shift ;;
 	-h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	*) echo "parley-servers-setup: unknown option $1 (--help)" >&2; exit 2 ;;
@@ -64,6 +72,7 @@ while [ $# -gt 0 ]; do
 	shift
 done
 case $units in systemd|launchd|none) ;; *) echo "parley-servers-setup: --units is systemd, launchd or none" >&2; exit 2 ;; esac
+case $sharing in ""|off|host|cluster) ;; *) echo "parley-servers-setup: --sharing is off, host or cluster" >&2; exit 2 ;; esac
 if [ "$units" = launchd ]; then
 	[ -n "$data" ] || data=/usr/local/var/parley
 	[ -n "$logs" ] || logs=/usr/local/var/log/parley
@@ -180,17 +189,89 @@ fill() { # KEY VALUE FILE SHOWN: a required setting; given VALUE, set it where F
 	fi
 	echo "  set $1=$2 in $4"
 }
+# (the templates, the same for a store on this disk and on another file system)
+store_settings() { # SHARING
+	echo "# The mail store's own settings, read by every server that uses it (parley-mail's README)."
+	echo "# sharing: off (one server at a time), host (several servers on this machine) or cluster"
+	echo "# (several anywhere). The parley-mail service runs several servers on this store."
+	echo "sharing=$1"
+}
+queue_settings() {
+	echo "# The mail queue's own settings, read by every SMTP server that uses it when it starts;"
+	echo "# every setting is in parley-smtp's README (\"Queue settings\")."
+	echo
+	echo "# Required (no default): the name the queue gives other servers, and the local domains"
+	echo "hostname="
+	echo "domains="
+	echo
+	echo "# alias: member, member ...; parley-mail-admin's Aliases page edits it"
+	echo "aliases=$conf/aliases.txt"
+	echo
+	echo "# A smart host (relayPassword names where the password is kept: @keychain:..., @file:..., @env:...)"
+	echo "#relayHost=smtp.example.net:587"
+	echo "#relayUser="
+	echo "#relayPassword=@file:$conf/smarthost.secret"
+	echo
+	echo "# DKIM signing keys: domain:selector:keyfile, comma separated"
+	echo "#dkim.keys="
+}
+setting() { # KEY FILE: its value (the last line that sets it), or nothing
+	sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$2" | tail -n 1 | sed 's/[[:space:]]*$//'
+}
 todo=""
 if [ -f "$R$conf/parley-mail.properties" ]; then
+	mroot=$(setting 'parley\.mail\.root' "$R$conf/parley-mail.properties")
+	mfs=$(setting 'parley\.mail\.fileSource' "$R$conf/parley-mail.properties")
+	remote=no
+	case $mroot in [Ff][Ii][Ll][Ee][Ss][Oo][Uu][Rr][Cc][Ee]:*) remote=yes ;; esac
+	case $(printf '%s' "$mfs" | tr 'A-Z' 'a-z') in ""|fileproxy) ;; *) remote=yes ;; esac
+fi
+if [ -f "$R$conf/parley-mail.properties" ] && [ "$remote" = yes ]; then
+	# A store on another file system: the files are made in it by StoreSetup, which finds the
+	# store from parley-mail.properties as the servers do
+	where=$mroot
+	case $where in *\?*) where="${where%%\?*}?..." ;; esac
+	case $mroot in
+	[Ff][Ii][Ll][Ee][Ss][Oo][Uu][Rr][Cc][Ee]:*) ;;
+	*) where="$where on $mfs" ;;
+	esac
+	if [ -n "$R" ]; then
+		echo "  (the mail store $where isn't on this disk: --root doesn't make its settings)"
+	else
+		if [ -x "$home/runtime/bin/java" ]; then
+			java=$home/runtime/bin/java
+		elif [ -n "$JAVA_HOME" ]; then
+			java=$JAVA_HOME/bin/java
+		else
+			java=java
+		fi
+		tmp=$(mktemp -d)
+		store_settings "${sharing:-cluster}" > "$tmp/store"
+		queue_settings > "$tmp/queue"
+		if out=$("$java" -cp "$home/lib/*" us.bringardner.parley.mail.store.StoreSetup \
+				--settings "$conf/parley-mail.properties" --store-template "$tmp/store" --queue-template "$tmp/queue" \
+				--fill "hostname=$hostname" --fill "domains=$domains" --require hostname --require domains 2>&1); then
+			printf '%s\n' "$out" | while IFS= read -r line; do
+				case $line in made*|set*) echo "  $line" ;; esac
+			done
+			missing=$(printf '%s\n' "$out" | sed -n 's/^missing \(.*\)$/\1/p')
+			if [ -n "$missing" ]; then
+				todo="$todo
+$(printf '%s\n' "$missing" | sed 's/^/    /')"
+			fi
+		else
+			echo "parley-servers-setup: couldn't make the mail store's settings in $where:" >&2
+			printf '%s\n' "$out" | sed 's/^/  /' >&2
+			todo="$todo
+    the mail store's and queue's settings in $where (run this again when it can be reached)"
+		fi
+		rm -rf "$tmp"
+	fi
+elif [ -f "$R$conf/parley-mail.properties" ]; then
 	store=$data/mail
 	if [ ! -e "$R$store/.parley-store.properties" ]; then
-		{
-			echo "# The mail store's own settings, read by every server that uses it (parley-mail's README)."
-			echo "# sharing: off (one server at a time), host (several servers on this machine) or cluster"
-			echo "# (several anywhere). The parley-mail service runs several servers on this store: host."
-			echo "sharing=host"
-		} > "$R$store/.parley-store.properties"
-		echo "  made $store/.parley-store.properties (sharing=host)"
+		store_settings "${sharing:-host}" > "$R$store/.parley-store.properties"
+		echo "  made $store/.parley-store.properties (sharing=${sharing:-host})"
 	fi
 	own "$user:$group" "$R$store/.parley-store.properties"
 	chmod 664 "$R$store/.parley-store.properties"
@@ -200,38 +281,19 @@ if [ -f "$R$conf/parley-mail.properties" ]; then
 	own "$user:$group" "$R$queue"
 	chmod 2770 "$R$queue"
 	if [ ! -e "$R$queue/queue.properties" ]; then
-		{
-			echo "# The mail queue's own settings, read by every SMTP server that uses it when it starts;"
-			echo "# every setting is in parley-smtp's README (\"Queue settings\")."
-			echo
-			echo "# Required (no default): the name the queue gives other servers, and the local domains"
-			echo "hostname="
-			echo "domains="
-			echo
-			echo "# alias: member, member ...; parley-mail-admin's Aliases page edits it"
-			echo "aliases=$conf/aliases.txt"
-			echo
-			echo "# A smart host (relayPassword names where the password is kept: @keychain:..., @file:..., @env:...)"
-			echo "#relayHost=smtp.example.net:587"
-			echo "#relayUser="
-			echo "#relayPassword=@file:$conf/smarthost.secret"
-			echo
-			echo "# DKIM signing keys: domain:selector:keyfile, comma separated"
-			echo "#dkim.keys="
-		} > "$R$queue/queue.properties"
+		queue_settings > "$R$queue/queue.properties"
 		echo "  made $queue/queue.properties"
 	fi
 	own "$user:$group" "$R$queue/queue.properties"
 	chmod 664 "$R$queue/queue.properties"
 	fill hostname "$hostname" "$R$queue/queue.properties" "$queue/queue.properties"
 	fill domains "$domains" "$R$queue/queue.properties" "$queue/queue.properties"
-
-	# (each SMTP server's hostname)
-	if [ -f "$R$conf/parley-smtp.properties" ]; then
-		for p in smtp submission submissions; do
-			fill "parley.mail.$p.hostname" "$hostname" "$R$conf/parley-smtp.properties" "$conf/parley-smtp.properties"
-		done
-	fi
+fi
+# (each SMTP server's hostname, wherever the store is)
+if [ -f "$R$conf/parley-mail.properties" ] && [ -f "$R$conf/parley-smtp.properties" ]; then
+	for p in smtp submission submissions; do
+		fill "parley.mail.$p.hostname" "$hostname" "$R$conf/parley-smtp.properties" "$conf/parley-smtp.properties"
+	done
 fi
 
 # ---------------------------------------------------------------- 6. the services

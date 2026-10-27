@@ -115,8 +115,12 @@ parley.mail.fileSource.jdbcPassword=@file:/etc/parley/store.secret
 ```
 
 (or `parley.mail.root` is one `filesource:` URL with them all). The store's and the queue's own
-settings are then in that store, not in `/var/lib/parley/mail`, with `sharing=cluster` (servers
-on several machines); `parley-servers-setup` makes them only on the local disk so far.
+settings are then in that store, not in `/var/lib/parley/mail`. `parley-servers-setup` makes them
+there, with `sharing=cluster` (servers on several machines; `--sharing` for another), finding the
+store from `parley-mail.properties` as the servers do (through parley-mail's `StoreSetup`, so it
+needs Java and the store reachable; when it isn't, the script says so and the package installs
+anyway: run it again). Set the store in `parley-mail.properties` before running it with
+`--hostname` and `--domains`, or it makes them on the local disk.
 
 Until they are set, the setup script lists what is missing and the servers refuse to start, naming
 the setting. Running the script again only fills settings that are empty; it never changes a value.
