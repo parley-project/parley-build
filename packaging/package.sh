@@ -560,8 +560,8 @@ stage_servers() { # DIR
 	done <<< "$SERVERS"
 	MODULE=$keep_module
 	mkdir -p "$dir/bin"
-	cp "$here/servers/parley-servers-setup" "$dir/bin/"
-	chmod 755 "$dir/bin/parley-servers-setup"
+	cp "$here/servers/parley-servers-setup" "$here/servers/parley-health" "$dir/bin/"
+	chmod 755 "$dir/bin/parley-servers-setup" "$dir/bin/parley-health"
 }
 
 # bin/parley-NAME for each server: its settings file is CONF/parley-NAME.properties, CONF being
@@ -630,6 +630,10 @@ write_server_files() { # ETC-PARLEY-DIR UNIT-DIR [LAUNCHD-DIR]
 				"$here/servers/parley-servers.plist.in" > "$launchd/us.bringardner.parley.$n.plist"
 		fi
 	done <<< "$SERVERS"
+	# (the health check: bin/parley-health, its settings, and on systemd a timer that runs it)
+	cp "$here/servers/parley-health.properties" "$etc/"
+	SERVER_FILES="$SERVER_FILES parley-health.properties"
+	cp "$here/servers/parley-health.service" "$here/servers/parley-health.timer" "$units/"
 }
 
 server_title() { # NAME: for the units' descriptions
@@ -656,6 +660,9 @@ servers_readme() { # DIR how
 		echo "their implicit TLS servers) in one process: parley-mail.properties first, then"
 		echo "parley-smtp.properties, parley-imap.properties and parley-pop3.properties. Its JMX (for"
 		echo "parley-mail-admin) is set in parley-mail.jvm: 127.0.0.1:9010, with the password in jmx/."
+		echo "bin/parley-health checks the servers, the disk, the queue and the certificate, and mails an"
+		echo "alert when that changes (settings: parley-health.properties; on systemd, enable"
+		echo "parley-health.timer to run it every 5 minutes)."
 		echo "The mail servers need a hostname and the local domains, which have no default:"
 		echo "bin/parley-servers-setup --hostname mail.example.com --domains example.com sets them in"
 		echo "the queue's settings (DATA/mail/.smtp-queue/queue.properties) and parley-smtp.properties."
@@ -695,6 +702,7 @@ linux_servers() {
 	for n in $SERVERS_FOUND; do
 		units="$units parley-$n.service"
 	done
+	units="$units parley-health.timer parley-health.service"
 	for f in $SERVER_FILES; do
 		confs="$confs /etc/parley/$f"
 	done
