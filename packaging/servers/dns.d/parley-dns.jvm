@@ -1,0 +1,12 @@
+# Java options of the parley-dns service (bin/parley-dns reads this file: one option per line).
+# JMX, for parley-mail-admin's Servers and DNS pages: on this machine only (127.0.0.1), with the
+# password files the package made in /etc/parley/jmx (the same as parley-mail's). Port 9011, beside
+# parley-mail's 9010; parley-mail-admin connects when parley.mail.admin.jmxUrl lists it.
+-Dcom.sun.management.jmxremote.port=9011
+-Dcom.sun.management.jmxremote.rmi.port=9011
+-Dcom.sun.management.jmxremote.host=127.0.0.1
+-Djava.rmi.server.hostname=127.0.0.1
+-Dcom.sun.management.jmxremote.ssl=false
+-Dcom.sun.management.jmxremote.authenticate=true
+-Dcom.sun.management.jmxremote.password.file=/etc/parley/jmx/jmxremote.password
+-Dcom.sun.management.jmxremote.access.file=/etc/parley/jmx/jmxremote.access

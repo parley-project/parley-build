@@ -8,7 +8,8 @@
 #   3. the settings files, copied from this folder's etc/parley into CONF unless CONF has them
 #      (the paths in them follow CONF, DATA and LOGS); the mail servers' files can be edited by
 #      the account's group, so that parley-mail-admin (in that group) can edit them
-#   4. the JMX password files of the parley-mail service (CONF/jmx), with a new password
+#   4. the JMX password files of the parley-mail service (CONF/jmx), with a new password, and the
+#      TSIG key parley-mail-admin's DNS page signs its changes with (CONF/dns/admin.key)
 #   5. the mail store's and the mail queue's own settings (DATA/mail/.parley-store.properties with
 #      sharing=host, DATA/mail/.smtp-queue/queue.properties), and with --hostname each SMTP
 #      server's hostname in CONF/parley-smtp.properties; without --hostname and --domains the
@@ -158,6 +159,22 @@ chmod 600 "$jmx/jmxremote.password"
 chmod 640 "$jmx/jmxremote.access"
 own "root:$group" "$jmx/admin.password"
 chmod 640 "$jmx/admin.password"
+
+# The DNS server's key for parley-mail-admin's record changes (dynamic updates, RFC 2136): the DNS
+# server reads it (parley.dns.tsigKeyFile=admin.key, parley.dns.updateKeys=parley-admin), and
+# parley-mail-admin, in the group, signs with it (parley.mail.admin.dnsKeyFile)
+key=$R$conf/dns/admin.key
+if [ -d "$R$conf/dns" ] && [ ! -f "$key" ]; then
+	secret=$(head -c 32 /dev/urandom | base64 | tr -d '\n')
+	umask 077
+	printf '# parley-mail-admin signs DNS changes with this key (made by parley-servers-setup)\nparley-admin hmac-sha256 %s\n' "$secret" > "$key"
+	umask 022
+	echo "  made the DNS update key $conf/dns/admin.key"
+fi
+if [ -f "$key" ]; then
+	own "$user:$group" "$key"
+	chmod 640 "$key"
+fi
 
 # ---------------------------------------------------------------- 5. the mail store and queue
 
