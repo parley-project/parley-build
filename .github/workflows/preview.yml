@@ -147,9 +147,10 @@ jobs:
         working-directory: parley-build/dist
         run: |
           set -e
-          sudo dpkg -i fsh_*.deb parley-files-viewer-tui_*.deb parley-servers_*.deb
+          sudo dpkg -i fsh_*.deb parley-files-viewer-tui_*.deb parley-ssh_*.deb parley-servers_*.deb
           test "$(/usr/bin/fsh -c 'echo smoke-ok')" = smoke-ok
           script -qec "pfv --help" /dev/null | grep -q usage
+          pssh -V 2>&1 | grep -q 'Parley SSH client'
           id parley
           systemctl cat parley-mail.service > /dev/null
           sudo test -f /etc/parley/jmx/jmxremote.password

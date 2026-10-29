@@ -11,6 +11,7 @@ silicon, Intel) and Windows, and puts the files on the pre-release `v2.0.0-previ
 | fsh-ide (Swing, JavaFX) | `fsh-ide-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `fsh-ide-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer (Swing, JavaFX) | `parley-files-viewer-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `parley-files-viewer-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer-tui (`pfv`; fsh has the same browser built in) | `parley-files-viewer-tui-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | (part of fsh, native too) |
+| parley-ssh (`pssh`, the SSH client) | `parley-ssh-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | |
 | parley-servers (DNS, FTP, SSH, and the mail servers: SMTP, submission, IMAP, POP3) | `parley-servers-V.zip`, `.tar.gz` | `.deb`, `.rpm` (Linux), `parley-servers-V-macos-ARCH.pkg` | |
 | parley-mail-admin (the mail servers' web administration, a war) | `parley-mail-admin-V.zip`, `.tar.gz` | `.deb`, `.rpm` (Linux, for the system's Tomcat 10.1) | |
 
@@ -24,8 +25,9 @@ Linux x86-64. The Linux packages' file names have `-` where their versions have 
 - **Linux** (`.deb`, `.rpm`): `/opt/parley/NAME` (`bin`, `lib`, `runtime`), the commands in
   `/usr/bin`, a menu entry for each window application. fsh's own packages install `/opt/fsh` and `/usr/bin/fsh` (in `/etc/shells`).
 - **macOS**: the window applications as a `.dmg` (an application to drag to Applications, with
-  the Swing launcher as its main one and the JavaFX one beside it); `pfv` as a `.pkg`
-  (`/usr/local/lib/parley/parley-files-viewer-tui`, `/usr/local/bin/pfv`).
+  the Swing launcher as its main one and the JavaFX one beside it); the terminal programs as a
+  `.pkg`: `pfv` (`/usr/local/lib/parley/parley-files-viewer-tui`, `/usr/local/bin/pfv`) and `pssh`
+  (`/usr/local/lib/parley/parley-ssh`, `/usr/local/bin/pssh`).
 - **Windows** (`.msi`): `C:\Program Files\NAME`, with Start menu entries (group Parley). The
   installers don't change `PATH`.
 
