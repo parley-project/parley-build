@@ -43,6 +43,10 @@
     <!-- Parent -->
     <module>../parley-parent</module>
 
+    <!-- parley-launcher, and the Maven plugin that writes each program's launcher list: fsh and the
+         Lanterna browser plugin run it as they are built (the reactor builds it before them) -->
+    <module>../parley-launcher</module>
+
     <!-- Logo, icons and mascot -->
     <module>../parley-brand</module>
 

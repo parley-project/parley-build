@@ -10,6 +10,7 @@
 swing-widgets                 swing-widgets                 master
 fx-widgets                    fx-widgets                    master
 parley-parent                 parley-parent                 release-2.0.0
+parley-launcher               parley-launcher               release-2.0.0
 parley-brand                  parley-brand                  release-2.0.0
 parley-core                   parley-core                   release-2.0.0
 parley-io                     parley-io                     release-2.0.0
