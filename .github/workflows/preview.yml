@@ -15,7 +15,7 @@
 # (packaging/publish.txt), where people without access to this one can download them.
 #
 # Run it by hand (Actions > preview > Run workflow), optionally building other branches of some
-# repositories (e.g. "fsh=installers parley-ssh=ssh-service"); every night it runs when a
+# repositories (e.g. "fsh=installers parley-ssh=my-branch"); every night it runs when a
 # release-2.0.0 branch (or this repository) has changed since the last run that built.
 
 name: preview

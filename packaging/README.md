@@ -45,7 +45,7 @@ sudo systemctl enable --now parley-mail
 The services run as the account `parley` (made by the package), may use ports below 1024, and
 keep their data in `/var/lib/parley` (`mail`, `ftp`), their logs in `/var/log/parley`, and their
 settings in `/etc/parley` (`dns`, `ssh` too). A server without a `main` method in the build is
-left out (the SSH server's is on parley-ssh's branch `ssh-service`). DNS needs a zone file in
+left out. DNS needs a zone file in
 `/etc/parley/dns/zones` before it starts.
 
 **macOS** (`.pkg`): `/usr/local/lib/parley/servers`, with a launchd daemon for each server in
@@ -206,7 +206,7 @@ keyboard library; GraalVM 24 or later for the native binaries.
 ## The workflow
 
 `preview.yml` runs by hand (Actions > preview > Run workflow), with other branches for some
-repositories if you like (`fsh=installers parley-ssh=ssh-service`), and every night when one of the
+repositories if you like (`fsh=installers parley-ssh=my-branch`), and every night when one of the
 `release-2.0.0` branches (or this repository) has changed since the last run that built. A
 scheduled run uses the workflow on this repository's default branch.
 
