@@ -80,7 +80,7 @@ server whose port is 0 is off; the implicit TLS ones are off until they have a p
 | `parley-mail.jvm` | Java options (a `java @argfile`): JMX on `127.0.0.1:9010` with a password |
 | `jmx/` | The JMX password files, made at install with a new password: `jmxremote.password` (the service's account only), `jmxremote.access`, `admin.password` (for parley-mail-admin) |
 | `parley-dns.properties`, `parley-dns.jvm` | The DNS server's settings (recursion off; dynamic updates only with `dns/admin.key`) and Java options: JMX on `127.0.0.1:9011`, with the same password |
-| `dns/zones/`, `dns/admin.key` | The zone files (the primary domain's by hand; the others, which inherit it with `$INHERIT`, made by parley-mail-admin's DNS page) and the TSIG key the DNS page signs record changes with, made at install (the group may read it) |
+| `dns/zones/`, `dns/shared.zone`, `dns/admin.key` | The zone files (the primary domain's by hand; a listed domain's, which inherits the shared zone with `$INHERIT`, made by parley-mail-admin's DNS page when it gets records of its own), the shared zone every listed domain is served from (by hand, `parley.dns.sharedZone`), and the TSIG key the DNS page signs record changes with, made at install (the group may read it) |
 
 The mail settings files and `/etc/parley` belong to the group `parley` and are group-writable, so
 parley-mail-admin (in that group) can edit them; the mail store and logs are group-readable.
