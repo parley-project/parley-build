@@ -146,7 +146,7 @@ if [ -d "$home/etc/parley" ]; then
 	done
 fi
 # (the mail servers' files: parley-mail-admin, in the group, edits them)
-for f in parley-mail.properties parley-smtp.properties parley-imap.properties parley-pop3.properties aliases.txt parley-mail.jvm; do
+for f in parley-mail.properties parley-smtp.properties parley-imap.properties parley-pop3.properties parley-mail-ftp.properties aliases.txt parley-mail.jvm; do
 	[ -f "$R$conf/$f" ] || continue
 	own "root:$group" "$R$conf/$f"
 	chmod 664 "$R$conf/$f"

@@ -12,7 +12,7 @@ silicon, Intel) and Windows, and puts the files on the pre-release `v2.0.0-previ
 | parley-files-viewer (Swing, JavaFX) | `parley-files-viewer-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `parley-files-viewer-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer-tui (`pfv`; fsh has the same browser built in) | `parley-files-viewer-tui-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | (part of fsh, native too) |
 | parley-ssh (`pssh`, the SSH client) | `parley-ssh-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | |
-| parley-servers (DNS, FTP, SSH, and the mail servers: SMTP, submission, IMAP, POP3) | `parley-servers-V.zip`, `.tar.gz` | `.deb`, `.rpm` (Linux), `parley-servers-V-macos-ARCH.pkg` | |
+| parley-servers (DNS, FTP, SSH, and the mail servers: SMTP, submission, IMAP, POP3, and FTP for the mail users) | `parley-servers-V.zip`, `.tar.gz` | `.deb`, `.rpm` (Linux), `parley-servers-V-macos-ARCH.pkg` | |
 | parley-mail-admin (the mail servers' web administration, a war) | `parley-mail-admin-V.zip`, `.tar.gz` | `.deb`, `.rpm` (Linux, for the system's Tomcat 10.1) | |
 
 Every file has a `.sha256` beside it. Nothing is signed or notarized. JavaFX's jars are for one
@@ -69,13 +69,16 @@ packages run the same script (`bin/parley-servers-setup --help`).
 
 `parley-mail` is parley-net's launcher (`ServerMain`) running the mail servers that
 `parley.servers` lists in `/etc/parley/parley-mail.properties`: `smtp`, `submission`,
-`submissions`, `imap`, `imaps`, `pop3` and `pop3s`, in one process, serving one mail store. A
-server whose port is 0 is off; the implicit TLS ones are off until they have a port and a key store.
+`submissions`, `imap`, `imaps`, `pop3`, `pop3s`, `ftp` and `ftps`, in one process, serving one mail
+store. A server whose port is 0 is off; the implicit TLS ones are off until they have a port and a
+key store. `ftp` and `ftps` give the mail users FTP: the users file, the local domains and the store
+are the mail servers' (log in as `name@domain`; each user's files are in `.ftp/DOMAIN/NAME` in the
+store; logins need TLS). They and the separate `parley-ftp` service both want port 21: run one.
 
 | `/etc/parley/` | |
 |---|---|
 | `parley-mail.properties` | What the mail servers share: `parley.servers`, the mail root, the users file, the TLS key store, logging; and where parley-mail-admin finds them |
-| `parley-smtp.properties`, `parley-imap.properties`, `parley-pop3.properties` | Each protocol's own settings, read after the shared file |
+| `parley-smtp.properties`, `parley-imap.properties`, `parley-pop3.properties`, `parley-mail-ftp.properties` | Each protocol's own settings, read after the shared file |
 | `users.txt`, `aliases.txt` | The users and the SMTP aliases (the queue's `aliases` names the file) |
 | `parley-mail.jvm` | Java options (a `java @argfile`): JMX on `127.0.0.1:9010` with a password |
 | `jmx/` | The JMX password files, made at install with a new password: `jmxremote.password` (the service's account only), `jmxremote.access`, `admin.password` (for parley-mail-admin) |

@@ -657,8 +657,9 @@ servers_readme() { # DIR how
 		done
 		echo
 		echo "parley-mail runs the mail servers (SMTP, submission, IMAP, POP3, and with a key store"
-		echo "their implicit TLS servers) in one process: parley-mail.properties first, then"
-		echo "parley-smtp.properties, parley-imap.properties and parley-pop3.properties. Its JMX (for"
+		echo "their implicit TLS servers) and FTP for the mail users in one process: parley-mail.properties"
+		echo "first, then parley-smtp.properties, parley-imap.properties, parley-pop3.properties and"
+		echo "parley-mail-ftp.properties. Its JMX (for"
 		echo "parley-mail-admin) is set in parley-mail.jvm: 127.0.0.1:9010, with the password in jmx/."
 		echo "bin/parley-health checks the servers, the disk, the queue and the certificate, and mails an"
 		echo "alert when that changes (settings: parley-health.properties; on systemd, enable"
