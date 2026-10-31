@@ -137,6 +137,17 @@ anyway: run it again). Set the store in `parley-mail.properties` before running 
 Until they are set, the setup script lists what is missing and the servers refuse to start, naming
 the setting. Running the script again only fills settings that are empty; it never changes a value.
 
+#### The spam scanner (rspamd)
+
+The SMTP servers can ask a scanner about each message (parley-smtp's README, `spam.*` queue
+settings). rspamd is a separate program: the `.deb` and `.rpm` list it as a recommended package
+(`apt install rspamd`, `dnf install rspamd`; the plain archive needs it installed by hand). When
+`/etc/rspamd` exists, or with `parley-servers-setup --rspamd`, the setup script puts the package's
+`rspamd/local.d` files in `/etc/rspamd/local.d` (the scanner listens on `127.0.0.1:11333` only)
+and sets `spam.provider=rspamd` in the queue's `queue.properties`, if it has no provider. Spam
+filtering stays **off** until `spam.enabled=true` (parley-mail-admin: Settings > Spam; a domain can
+override it on the Domains page). Restart rspamd after the first setup (`systemctl restart rspamd`).
+
 #### The health check
 
 `bin/parley-health` checks this machine's Parley servers and mails an alert when that changes (a

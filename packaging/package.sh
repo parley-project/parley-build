@@ -562,6 +562,9 @@ stage_servers() { # DIR
 	mkdir -p "$dir/bin"
 	cp "$here/servers/parley-servers-setup" "$here/servers/parley-health" "$dir/bin/"
 	chmod 755 "$dir/bin/parley-servers-setup" "$dir/bin/parley-health"
+	# (rspamd's settings, which parley-servers-setup puts in /etc/rspamd/local.d)
+	mkdir -p "$dir/rspamd"
+	cp -R "$here/servers/rspamd/local.d" "$dir/rspamd/"
 }
 
 # bin/parley-NAME for each server: its settings file is CONF/parley-NAME.properties, CONF being
@@ -725,6 +728,7 @@ Section: net
 Priority: optional
 Installed-Size: $(du -sk "$root_dir" | cut -f1)
 Depends: passwd
+Recommends: rspamd
 Homepage: https://github.com/parley-project
 Description: $TITLE
  $DESCRIPTION. It carries its own Java runtime. The services are installed but not enabled
@@ -759,6 +763,7 @@ URL: https://github.com/parley-project
 Packager: Tony Bringardner <tony.bringardner@gmail.com>
 AutoReqProv: no
 Requires(pre): shadow-utils
+Recommends: rspamd
 
 %description
 $DESCRIPTION. It carries its own Java runtime. The services are installed but not enabled

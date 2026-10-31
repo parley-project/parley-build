@@ -23,6 +23,10 @@
 #      --alert-from, where its alerts go and who they are from; and its state folder
 #   7. the services (--units systemd or launchd), not started: their units for this folder, the
 #      account and the folders above (on systemd also parley-health.timer, not enabled)
+#   8. the spam scanner rspamd, when it is installed (/etc/rspamd exists) or with --rspamd: its
+#      local.d settings from this folder's rspamd/local.d (the scanner listens on 127.0.0.1:11333
+#      only), and the mail queue's spam.provider=rspamd. Spam filtering stays OFF (spam.enabled
+#      is not set): turn it on in parley-mail-admin (Settings > Spam) or in queue.properties
 #
 # Usage: parley-servers-setup [options]
 #   --user U          the services' account (default parley; with --units launchd: the user
@@ -40,6 +44,8 @@
 #                     host for a store on this disk, cluster for one on another file system)
 #   --alert-to LIST   where the health check's alerts go (an address on another server)
 #   --alert-from ADDR who they are from (an address this server may send as)
+#   --rspamd          set up rspamd's settings and the queue's provider even if /etc/rspamd isn't
+#                     there yet (install the rspamd package: apt install rspamd, dnf install rspamd)
 #   --root DIR        do it all below DIR (to see what it would make)
 #
 # Run it as root for the folders' owners and the units; as another user it makes what that user
@@ -57,7 +63,7 @@ while [ -L "$self" ]; do
 done
 home=$(cd "$(dirname "$self")/.." && pwd)
 
-user="" group="" conf=/etc/parley data="" logs="" units=none create=no root="" hostname="" domains="" sharing="" alert_to="" alert_from=""
+user="" group="" conf=/etc/parley data="" logs="" units=none create=no root="" hostname="" domains="" sharing="" alert_to="" alert_from="" rspamd=no
 while [ $# -gt 0 ]; do
 	case $1 in
 	--user) user=$2; shift ;;
@@ -72,6 +78,7 @@ while [ $# -gt 0 ]; do
 	--sharing) sharing=$2; shift ;;
 	--alert-to) alert_to=$2; shift ;;
 	--alert-from) alert_from=$2; shift ;;
+	--rspamd) rspamd=yes ;;
 	--root) root=$2; shift ;;
 	-h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	*) echo "parley-servers-setup: unknown option $1 (--help)" >&2; exit 2 ;;
@@ -237,6 +244,13 @@ queue_settings() {
 	echo
 	echo "# DKIM signing keys: domain:selector:keyfile, comma separated"
 	echo "#dkim.keys="
+	echo
+	echo "# Spam filtering (off until spam.enabled is true; parley-mail-admin's Settings > Spam):"
+	echo "# the filter is none, rspamd or spamassassin, and spam.domains overrides it per domain"
+	echo "#spam.enabled=false"
+	echo "#spam.provider=none"
+	echo "#spam.rspamd.url=http://127.0.0.1:11333"
+	echo "#spam.domains=example.com:off"
 }
 setting() { # KEY FILE: its value (the last line that sets it), or nothing
 	sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$2" | tail -n 1 | sed 's/[[:space:]]*$//'
@@ -317,6 +331,32 @@ if [ -f "$R$conf/parley-mail.properties" ] && [ -f "$R$conf/parley-smtp.properti
 	for p in smtp submission submissions; do
 		fill "parley.mail.$p.hostname" "$hostname" "$R$conf/parley-smtp.properties" "$conf/parley-smtp.properties"
 	done
+fi
+
+# ---------------------------------------------------------------- 5b. the spam scanner
+
+# (rspamd is a separate package; its settings are Parley's files in its local.d, made once, and the
+# queue's provider is only set where the queue has none, so spam.enabled stays the admin's choice)
+if [ "$rspamd" = yes ] || [ -d "$R/etc/rspamd" ]; then
+	if [ -d "$home/rspamd/local.d" ] && { [ "$asroot" = yes ] || [ -n "$R" ]; }; then
+		mkdir -p "$R/etc/rspamd/local.d"
+		for f in "$home"/rspamd/local.d/*; do
+			[ -f "$f" ] || continue
+			if [ ! -e "$R/etc/rspamd/local.d/$(basename "$f")" ]; then
+				cp "$f" "$R/etc/rspamd/local.d/"
+				echo "  made /etc/rspamd/local.d/$(basename "$f") (restart rspamd to read it)"
+			fi
+		done
+	fi
+	if [ -f "$R$data/mail/.smtp-queue/queue.properties" ]; then
+		if ! grep -q '^spam\.provider=' "$R$data/mail/.smtp-queue/queue.properties"; then
+			fill spam.provider rspamd "$R$data/mail/.smtp-queue/queue.properties" "$data/mail/.smtp-queue/queue.properties"
+		fi
+		echo "  spam filtering is off until spam.enabled=true (Settings > Spam in parley-mail-admin)"
+	fi
+	if [ ! -d "$R/etc/rspamd" ] || { [ -z "$R" ] && ! command -v rspamd > /dev/null 2>&1; }; then
+		echo "parley-servers-setup: rspamd isn't installed: apt install rspamd (or dnf install rspamd), then restart it"
+	fi
 fi
 
 # ---------------------------------------------------------------- 6. the health check
