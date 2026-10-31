@@ -25,8 +25,9 @@
 #      account and the folders above (on systemd also parley-health.timer, not enabled)
 #   8. the spam scanner rspamd, when it is installed (/etc/rspamd exists) or with --rspamd: its
 #      local.d settings from this folder's rspamd/local.d (the scanner listens on 127.0.0.1:11333
-#      only), and the mail queue's spam.provider=rspamd. Spam filtering stays OFF (spam.enabled
-#      is not set): turn it on in parley-mail-admin (Settings > Spam) or in queue.properties
+#      only), and the SMTP server's spam provider, parley.mail.smtp.spam.provider=rspamd in
+#      CONF/parley-smtp.properties. Spam filtering stays OFF (parley.mail.smtp.spam.enabled is not
+#      set): turn it on in parley-mail-admin (Settings > SMTP) or in that file
 #
 # Usage: parley-servers-setup [options]
 #   --user U          the services' account (default parley; with --units launchd: the user
@@ -245,11 +246,9 @@ queue_settings() {
 	echo "# DKIM signing keys: domain:selector:keyfile, comma separated"
 	echo "#dkim.keys="
 	echo
-	echo "# Spam filtering (off until spam.enabled is true; parley-mail-admin's Settings > Spam):"
-	echo "# the filter is none, rspamd or spamassassin, and spam.domains overrides it per domain"
-	echo "#spam.enabled=false"
-	echo "#spam.provider=none"
-	echo "#spam.rspamd.url=http://127.0.0.1:11333"
+	echo "# Spam: which provider checks mail, and its settings, are the SMTP server's own (parley.mail.smtp.spam.* in"
+	echo "# parley-smtp.properties). Here only the per-domain overrides, which belong to the queue's domains:"
+	echo "# domain:off or domain:provider, comma separated (parley-mail-admin's Domains page edits it)"
 	echo "#spam.domains=example.com:off"
 }
 setting() { # KEY FILE: its value (the last line that sets it), or nothing
@@ -348,11 +347,9 @@ if [ "$rspamd" = yes ] || [ -d "$R/etc/rspamd" ]; then
 			fi
 		done
 	fi
-	if [ -f "$R$data/mail/.smtp-queue/queue.properties" ]; then
-		if ! grep -q '^spam\.provider=' "$R$data/mail/.smtp-queue/queue.properties"; then
-			fill spam.provider rspamd "$R$data/mail/.smtp-queue/queue.properties" "$data/mail/.smtp-queue/queue.properties"
-		fi
-		echo "  spam filtering is off until spam.enabled=true (Settings > Spam in parley-mail-admin)"
+	if [ -f "$R$conf/parley-smtp.properties" ]; then
+		fill parley.mail.smtp.spam.provider rspamd "$R$conf/parley-smtp.properties" "$conf/parley-smtp.properties"
+		echo "  spam filtering is off until parley.mail.smtp.spam.enabled=true (Settings > SMTP in parley-mail-admin)"
 	fi
 	if [ ! -d "$R/etc/rspamd" ] || { [ -z "$R" ] && ! command -v rspamd > /dev/null 2>&1; }; then
 		echo "parley-servers-setup: rspamd isn't installed: apt install rspamd (or dnf install rspamd), then restart it"

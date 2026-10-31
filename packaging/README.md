@@ -144,9 +144,12 @@ settings). rspamd is a separate program: the `.deb` and `.rpm` list it as a reco
 (`apt install rspamd`, `dnf install rspamd`; the plain archive needs it installed by hand). When
 `/etc/rspamd` exists, or with `parley-servers-setup --rspamd`, the setup script puts the package's
 `rspamd/local.d` files in `/etc/rspamd/local.d` (the scanner listens on `127.0.0.1:11333` only)
-and sets `spam.provider=rspamd` in the queue's `queue.properties`, if it has no provider. Spam
-filtering stays **off** until `spam.enabled=true` (parley-mail-admin: Settings > Spam; a domain can
-override it on the Domains page). Restart rspamd after the first setup (`systemctl restart rspamd`).
+and sets `parley.mail.smtp.spam.provider=rspamd` in `parley-smtp.properties`, if it has no provider.
+The provider and its settings are the SMTP server's own (only the server that receives mail from
+other servers checks for spam); the providers are found at run time, so one added as a plugin
+appears in the admin's list. Spam filtering stays **off** until `parley.mail.smtp.spam.enabled=true`
+(parley-mail-admin: Settings > SMTP; a domain can override it on the Domains page, which is kept in
+the queue's `spam.domains`). Restart rspamd after the first setup (`systemctl restart rspamd`).
 
 #### The health check
 
