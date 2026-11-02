@@ -123,9 +123,9 @@ mail. `parley-mail.properties` names the file system and gives its connection se
 ```properties
 parley.mail.root=/mail
 parley.mail.fileSource=Jdbc
-parley.mail.fileSource.jdbcUrl=jdbc:mysql://db.example.com:3306/file_source
-parley.mail.fileSource.jdbcUser=parley
-parley.mail.fileSource.jdbcPassword=@file:/etc/parley/store.secret
+parley.mail.fileSource.url=jdbc:mysql://db.example.com:3306/file_source
+parley.mail.fileSource.user=parley
+parley.mail.fileSource.password=@file:/etc/parley/store.secret
 ```
 
 (or `parley.mail.root` is one `filesource:` URL with them all). The store's and the queue's own

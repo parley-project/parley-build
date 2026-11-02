@@ -68,7 +68,7 @@ mail_props=$conf/parley-mail.properties
 mail_root=$(prop "$mail_props" parley.mail.root)
 queue=$(prop "$conf/parley-smtp.properties" parley.mail.smtp.queue "$(prop "$mail_props" parley.mail.smtp.queue .smtp-queue)")
 logs=/var/log/parley
-log_file=$(prop "$mail_props" logFile)
+log_file=$(prop "$mail_props" parley.log.file)
 [ -n "$log_file" ] && logs=$(dirname "$log_file")
 
 # ---------------------------------------------------------------- the checks
