@@ -70,8 +70,10 @@ packages run the same script (`bin/parley-servers-setup --help`).
 `parley-mail` is parley-net's launcher (`ServerMain`) running the mail servers that
 `parley.servers` lists in `/etc/parley/parley-mail.properties`: `smtp`, `submission`,
 `submissions`, `imap`, `imaps`, `pop3`, `pop3s`, `ftp` and `ftps`, in one process, serving one mail
-store. A server whose port is 0 is off; the implicit TLS ones are off until they have a port and a
-key store. `ftp` and `ftps` give the mail users FTP: the users file, the local domains and the store
+store. Each runs on its standard port unless its file sets another; to turn one off, leave it out
+of `parley.servers` (parley-mail-admin's Dashboard does it: Turn on, Turn off). The implicit TLS ones
+(`submissions`, `imaps`, `pop3s`, `ftps`) are skipped with a warning until there is a key store
+(`parley.mail.tls.keyStore`). `ftp` and `ftps` give the mail users FTP: the users file, the local domains and the store
 are the mail servers' (log in as `name@domain`; each user's files are in `.ftp/DOMAIN/NAME` in the
 store; logins need TLS). They and the separate `parley-ftp` service both want port 21: run one.
 
