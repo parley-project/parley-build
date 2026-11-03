@@ -93,7 +93,7 @@ store; logins need TLS). They and the separate `parley-ftp` service both want po
 The mail settings files and `/etc/parley` belong to the group `parley` and are group-writable, so
 parley-mail-admin (in that group) can edit them; the mail store and logs are group-readable.
 
-parley-mail-admin manages any Parley server it reaches over JMX (its Servers page), and the DNS
+parley-mail-admin manages any Parley server it reaches over JMX (its Dashboard), and the DNS
 server's zones (its DNS page, where a DNS server runs): to manage the parley-dns service too, list
 its JMX address beside parley-mail's in `parley.mail.admin.jmxUrl` and set
 `parley.mail.admin.dnsKeyFile=/etc/parley/dns/admin.key` (commented in `parley-mail.properties`).
