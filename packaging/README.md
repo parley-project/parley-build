@@ -45,8 +45,11 @@ sudo systemctl enable --now parley-mail
 The services run as the account `parley` (made by the package), may use ports below 1024, and
 keep their data in `/var/lib/parley` (`mail`, `ftp`), their logs in `/var/log/parley`, and their
 settings in `/etc/parley` (`dns`, `ssh` too). A server without a `main` method in the build is
-left out. DNS needs a zone file in
-`/etc/parley/dns/zones` before it starts.
+left out. DNS needs the primary domain's zone file in `/etc/parley/dns/zones` before it starts:
+`sudo /opt/parley/servers/bin/parley-servers-setup --hostname mx1.example.com --domains example.com
+--address 192.0.2.10` makes `example.com.txt` (SOA, NS and MX naming the host name, and its A
+record) and sets `parley.dns.masterZone`, when the folder has no zone file (`--dns-domain` names
+another primary domain). It is made once; edit it afterwards.
 
 **macOS** (`.pkg`): `/usr/local/lib/parley/servers`, with a launchd daemon for each server in
 `/Library/LaunchDaemons` (`us.bringardner.parley.NAME.plist`), **made but not started**:

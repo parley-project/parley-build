@@ -10,6 +10,10 @@
 #      the account's group, so that parley-mail-admin (in that group) can edit them
 #   4. the JMX password files of the parley-mail service (CONF/jmx), with a new password, and the
 #      TSIG key parley-mail-admin's DNS page signs its changes with (CONF/dns/admin.key)
+#   4b. the DNS server's primary zone, when the zone folder has no zone file: CONF/dns/zones/
+#      DOMAIN.txt for --dns-domain (default: the first of --domains), with its SOA, NS and MX
+#      naming --hostname, and with --address that name's A record; and parley.dns.masterZone in
+#      CONF/parley-dns.properties. An admin's to edit afterwards (it is never changed again)
 #   5. the mail store's and the mail queue's own settings (.parley-store.properties in the store,
 #      with sharing=host, and .smtp-queue/queue.properties), and with --hostname each SMTP
 #      server's hostname in CONF/parley-smtp.properties; without --hostname and --domains the
@@ -41,6 +45,9 @@
 #   --hostname NAME   the mail servers' name (the PTR record of the server's address): the queue's
 #                     hostname and each SMTP server's (smtp, submission, submissions)
 #   --domains LIST    the local mail domains, comma separated (the queue's domains)
+#   --dns-domain D    the DNS server's primary domain (default: the first of --domains)
+#   --address ADDR    the server's public IPv4 address, for the A record of --hostname in that
+#                     zone (when the name is in the domain)
 #   --sharing MODE    the store's sharing when its settings are made: off, host or cluster (default
 #                     host for a store on this disk, cluster for one on another file system)
 #   --alert-to LIST   where the health check's alerts go (an address on another server)
@@ -64,7 +71,7 @@ while [ -L "$self" ]; do
 done
 home=$(cd "$(dirname "$self")/.." && pwd)
 
-user="" group="" conf=/etc/parley data="" logs="" units=none create=no root="" hostname="" domains="" sharing="" alert_to="" alert_from="" rspamd=no
+user="" group="" conf=/etc/parley data="" logs="" units=none create=no root="" hostname="" domains="" dns_domain="" address="" sharing="" alert_to="" alert_from="" rspamd=no
 while [ $# -gt 0 ]; do
 	case $1 in
 	--user) user=$2; shift ;;
@@ -76,6 +83,8 @@ while [ $# -gt 0 ]; do
 	--create-account) create=yes ;;
 	--hostname) hostname=$2; shift ;;
 	--domains) domains=$2; shift ;;
+	--dns-domain) dns_domain=$2; shift ;;
+	--address) address=$2; shift ;;
 	--sharing) sharing=$2; shift ;;
 	--alert-to) alert_to=$2; shift ;;
 	--alert-from) alert_from=$2; shift ;;
@@ -199,9 +208,6 @@ if [ -f "$key" ]; then
 	chmod 640 "$key"
 fi
 
-# ---------------------------------------------------------------- 5. the mail store and queue
-
-# (only with the mail servers' settings; each file is made once: an admin's to edit afterwards)
 fill() { # KEY VALUE FILE SHOWN: a required setting; given VALUE, set it where FILE has it empty or
 	# commented out (else at the end), never where it has a value; without one, say it's missing
 	grep -q "^$1=..*" "$3" && return 0
@@ -220,6 +226,69 @@ fill() { # KEY VALUE FILE SHOWN: a required setting; given VALUE, set it where F
 	fi
 	echo "  set $1=$2 in $4"
 }
+
+# ---------------------------------------------------------------- 4b. the DNS server's primary zone
+
+# (only with the DNS server's settings and an empty zone folder: DNS doesn't start without the
+# primary domain's zone; the zone is made once, an admin's to edit afterwards)
+dns_todo=""
+dprops=$R$conf/parley-dns.properties
+zones=$R$conf/dns/zones
+if [ -f "$dprops" ] && [ -d "$zones" ]; then
+	master=$(sed -n 's/^[[:space:]]*parley\.dns\.masterZone[[:space:]]*=[[:space:]]*//p' "$dprops" | tail -n 1 | sed 's/[[:space:]]*$//')
+	zone=${master:-${dns_domain:-${domains%%,*}}}
+	zone=$(printf '%s' "$zone" | tr 'A-Z' 'a-z' | sed 's/[[:space:]]//g; s/\.$//')
+	host=$(printf '%s' "$hostname" | tr 'A-Z' 'a-z' | sed 's/\.$//')
+	have=no
+	for z in "$zones"/*.txt; do [ -f "$z" ] && have=yes && break; done
+	if [ "$have" = no ]; then
+		if [ -n "$zone" ] && [ -n "$host" ]; then
+			serial=$(date +%Y%m%d)01
+			case $host in
+			"$zone") label=@ ;;
+			*."$zone") label=${host%."$zone"} ;;
+			*) label="" ;;
+			esac
+			{
+				echo "; The primary domain's zone ($zone), made by parley-servers-setup: edit it, and raise the"
+				echo "; serial after a change (parley-dns's README, \"Zone files\"). The other listed domains are"
+				echo "; served from the shared zone (parley.dns.sharedZone) unless they have a zone file of their own."
+				echo "\$TTL 3600"
+				echo "@	IN	SOA	$host. postmaster.$zone. ( $serial 3600 1800 1209600 3600 )"
+				echo "	IN	NS	$host."
+				echo "	IN	MX	10 $host."
+				if [ -n "$label" ] && [ -n "$address" ]; then
+					echo "$label	IN	A	$address"
+				elif [ -n "$label" ]; then
+					echo "; $host's address (its A record): run parley-servers-setup --address again, or add"
+					echo ";$label	IN	A	<this server's public address>"
+				else
+					echo "; ($host is outside $zone: its A record belongs in its own domain's zone)"
+				fi
+			} > "$zones/$zone.txt"
+			own "$user:$group" "$zones/$zone.txt"
+			chmod 644 "$zones/$zone.txt"
+			echo "  made $conf/dns/zones/$zone.txt (SOA, NS and MX $host${address:+, A $address})"
+			if [ -n "$label" ] && [ -z "$address" ]; then
+				dns_todo="$dns_todo
+    $host's A record in $conf/dns/zones/$zone.txt (--address)"
+			fi
+		else
+			dns_todo="$dns_todo
+    the primary domain's zone in $conf/dns/zones (run this again with --hostname NAME and --dns-domain DOMAIN or --domains LIST)"
+		fi
+	fi
+	if [ -z "$master" ] && [ -n "$zone" ] && [ -f "$zones/$zone.txt" ]; then
+		fill parley.dns.masterZone "$zone" "$dprops" "$conf/parley-dns.properties"
+	elif [ -z "$master" ]; then
+		dns_todo="$dns_todo
+    parley.dns.masterZone= in $conf/parley-dns.properties"
+	fi
+fi
+
+# ---------------------------------------------------------------- 5. the mail store and queue
+
+# (only with the mail servers' settings; each file is made once: an admin's to edit afterwards)
 # (the templates, the same for a store on this disk and on another file system)
 store_settings() { # SHARING
 	echo "# The mail store's own settings, read by every server that uses it (parley-mail's README)."
@@ -406,6 +475,9 @@ launchd)
 esac
 
 echo "parley-servers-setup: account $user:$group, settings $conf, data $data, logs $logs"
+if [ -n "$dns_todo" ]; then
+	echo "parley-servers-setup: the DNS server won't start until these are made:$dns_todo"
+fi
 if [ -n "$todo" ]; then
 	echo "parley-servers-setup: the mail servers won't start until these are set (or run it again"
 	echo "  with --hostname NAME --domains LIST):$todo"
