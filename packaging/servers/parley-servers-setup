@@ -144,6 +144,9 @@ chmod 750 "$R$conf/jmx"
 chmod 2750 "$R$data" "$R$data/mail" "$R$logs"
 chmod 2770 "$R$data/mail/.parley-locks"
 chmod 700 "$R$conf/ssh"
+# the DNS server only reads its zone files: parley-mail-admin (in the group) writes the shared zone's
+# file and new domains' zone files there
+chmod 2775 "$R$conf/dns" "$R$conf/dns/zones"
 
 # ---------------------------------------------------------------- 3. the settings files
 
