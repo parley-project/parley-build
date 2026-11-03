@@ -21,7 +21,7 @@
 #      on this disk, or, when parley-mail.properties puts it on another file system
 #      (parley.mail.fileSource and its parley.mail.fileSource.* connection settings, or a
 #      filesource: URL as parley.mail.root, such as a database several servers share), that
-#      store, where the two files are made through parley-mail's StoreSetup (with Java), with
+#      store, where the two files are made through parley-mail-admin's StoreSetup (with Java), with
 #      sharing=cluster
 #   6. the health check's settings (CONF/parley-health.properties): with --alert-to and
 #      --alert-from, where its alerts go and who they are from; and its state folder
@@ -360,7 +360,7 @@ if [ -f "$R$conf/parley-mail.properties" ] && [ "$remote" = yes ]; then
 		tmp=$(mktemp -d)
 		store_settings "${sharing:-cluster}" > "$tmp/store"
 		queue_settings > "$tmp/queue"
-		if out=$("$java" -cp "$home/lib/*" us.bringardner.parley.mail.store.StoreSetup \
+		if out=$("$java" -cp "$home/lib/*" us.bringardner.parley.mail.admin.server.StoreSetup \
 				--settings "$conf/parley-mail.properties" --store-template "$tmp/store" --queue-template "$tmp/queue" \
 				--fill "hostname=$hostname" --fill "domains=$domains" --require hostname --require domains 2>&1); then
 			printf '%s\n' "$out" | while IFS= read -r line; do
