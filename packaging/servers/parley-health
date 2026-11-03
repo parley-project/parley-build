@@ -7,7 +7,8 @@
 # It checks, as CONF/parley-health.properties says (CONF: /etc/parley, or the folder of the file
 # PARLEY_CONF names):
 #   1. the services:  each systemd unit in parley.health.services is active
-#   2. the ports:     each port in parley.health.ports answers on this machine
+#   2. the ports:     each port in parley.health.ports answers on this machine; those in
+#                     parley.health.tlsPorts (the implicit-TLS ones) with a TLS handshake
 #   3. the disk:      the file systems of the mail root and the logs are under parley.health.diskPercent
 #   4. the queue:     no message has waited in the SMTP queue longer than parley.health.queueMinutes
 #   5. the certificate: the one on port parley.health.certPort expires in more than
@@ -55,6 +56,7 @@ alert_from=$(prop "$settings" parley.health.alertFrom)
 smtp=$(prop "$settings" parley.health.smtp 127.0.0.1:25)
 services=$(prop "$settings" parley.health.services parley-mail)
 ports=$(prop "$settings" parley.health.ports)
+tls_ports=$(prop "$settings" parley.health.tlsPorts 465,990,993,995)
 disk_percent=$(prop "$settings" parley.health.diskPercent 80)
 queue_minutes=$(prop "$settings" parley.health.queueMinutes 60)
 cert_port=$(prop "$settings" parley.health.certPort)
@@ -90,9 +92,22 @@ for u in $(echo "$services" | tr ',' ' '); do
 	fi
 done
 
-# 2. the ports
+# 2. the ports. An implicit-TLS port gets a whole TLS handshake: a connection closed in the middle
+# of one is a failed handshake to the server, and this checks that TLS works too
+is_tls_port() {
+	case ",$(echo "$tls_ports" | tr -d ' ')," in
+	*",$1,"*) return 0 ;;
+	esac
+	return 1
+}
 for p in $(echo "$ports" | tr ',' ' '); do
-	if timeout 5 bash -c "exec 3<> /dev/tcp/127.0.0.1/$p" 2> /dev/null || (command -v nc > /dev/null && nc -z -w 5 127.0.0.1 "$p" 2> /dev/null); then
+	if is_tls_port "$p"; then
+		if timeout 10 openssl s_client -connect "127.0.0.1:$p" -brief < /dev/null > /dev/null 2>&1; then
+			note "port $p answers with TLS"
+		else
+			problem "port $p doesn't answer with TLS"
+		fi
+	elif timeout 5 bash -c "exec 3<> /dev/tcp/127.0.0.1/$p" 2> /dev/null || (command -v nc > /dev/null && nc -z -w 5 127.0.0.1 "$p" 2> /dev/null); then
 		note "port $p answers"
 	else
 		problem "port $p doesn't answer"
