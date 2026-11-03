@@ -222,6 +222,13 @@ Needs: a JDK 17 or later with `jlink` and `jpackage` (25 for fsh's AOT cache); `
 `rpmbuild` on Linux; the WiX Toolset on Windows (for jpackage), and the MSVC build tools for fsh's
 keyboard library; GraalVM 24 or later for the native binaries.
 
+An installer's Java runtime holds the Java modules its jars use (jdeps reads the `lib` folder), plus
+what is found only at run time (elliptic curves, more encodings, every locale, zip file systems, DNS
+through JNDI, `jdk.unsupported`, the JMX agent). The servers' is about 82 MB (all of Java SE was 96
+MB): they use `java.desktop` (FTP's THMB thumbnails, the certificate dialog) and the rest is the JVM
+itself. `PARLEY_RUNTIME_MODULES=java.se` (any comma-separated list) replaces what jdeps finds, for
+plugins that need more than the jars in `lib`.
+
 ## The workflow
 
 `preview.yml` runs by hand (Actions > preview > Run workflow), with other branches for some

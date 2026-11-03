@@ -90,7 +90,7 @@ if [ -z "${JAVA_HOME:-}" ]; then
 		JAVA_HOME=$(cd "$(dirname "$(readlink -f "$(command -v javac)")")/.." && pwd)
 	fi
 fi
-for tool in java jlink jpackage; do
+for tool in java jlink jpackage jdeps jar; do
 	if [ ! -x "$JAVA_HOME/bin/$tool$exe" ]; then
 		echo "package.sh: no $tool in JAVA_HOME ($JAVA_HOME): set JAVA_HOME to a JDK 17 or later" >&2
 		exit 1
@@ -217,12 +217,16 @@ write_readme() { # DIR how
 	[ -f "$root/$MODULE/LICENSE" ] && cp "$root/$MODULE/LICENSE" "$dir/" || cp "$build/LICENSE" "$dir/"
 }
 
-# A Java runtime with the modules Parley's applications use: all of Java SE, plus what is found
-# only at run time (elliptic curves for SSH, more encodings, every locale, zip file systems, DNS
-# through JNDI, sun.misc for JNA and the terminal libraries, the JMX agent for the servers' remote
-# management: com.sun.management.jmxremote)
+# A Java runtime with the modules Parley's applications use: what the jars in the lib folder beside
+# DIR use (jdeps), plus what is found only at run time (elliptic curves for SSH, more encodings,
+# every locale, zip file systems, DNS through JNDI, sun.misc for JNA and the terminal libraries, the
+# JMX agent for the servers' remote management: com.sun.management.jmxremote). PARLEY_RUNTIME_MODULES
+# replaces what jdeps finds (java.se: all of Java SE, for plugins that need more than the jars here).
+# The CDS archive for heaps over 32 GB (classes_nocoops.jsa, 14 MB) is left out, as in fsh's.
 make_runtime() { # DIR
-	local available modules=java.se m
+	local available modules m
+	modules=${PARLEY_RUNTIME_MODULES:-$(runtime_modules "$(dirname "$1")/lib")}
+	echo "  runtime modules: $modules"
 	available=$("$JAVA_HOME/bin/java$exe" --list-modules | sed 's/@.*//')
 	for m in jdk.crypto.ec jdk.charsets jdk.localedata jdk.zipfs jdk.naming.dns jdk.unsupported jdk.management jdk.management.agent jdk.crypto.cryptoki; do
 		if echo "$available" | grep -qx "$m"; then
@@ -233,6 +237,31 @@ make_runtime() { # DIR
 	[ "$major" -lt 21 ] && compress=2
 	"$JAVA_HOME/bin/jlink$exe" --add-modules "$modules" --output "$1" \
 		--strip-debug --no-header-files --no-man-pages --compress=$compress --generate-cds-archive
+	rm -f "$1/lib/server/classes_nocoops.jsa" "$1/bin/server/classes_nocoops.jsa"
+}
+
+# The Java modules the jars in LIB use, comma-separated (java.base at least). jdeps reads them
+# unpacked and without module-info: a modular jar that requires a module the JDK doesn't have
+# (commons-dbcp2 requires java.transaction) would stop it
+runtime_modules() { # LIB
+	local classes=$work/jdeps-classes lib f d found
+	lib=$(cd "$1" && pwd)
+	rm -rf "$classes"
+	mkdir -p "$classes"
+	for f in "$lib"/*.jar; do
+		[ -f "$f" ] || continue
+		d=$classes/$(basename "$f" .jar)
+		mkdir -p "$d"
+		(cd "$d" && "$JAVA_HOME/bin/jar$exe" xf "$f")
+		find "$d" -name module-info.class -exec rm -f {} +
+	done
+	found=$(ls "$classes")
+	if [ -n "$found" ]; then
+		found=$("$JAVA_HOME/bin/jdeps$exe" -q --multi-release "$major" --ignore-missing-deps \
+			--print-module-deps "$classes"/*) || { echo "jdeps failed on $lib" >&2; exit 1; }
+	fi
+	rm -rf "$classes"
+	echo "${found:-java.base}"
 }
 
 archive() { # STAGE-PARENT NAME: NAME.tar.gz and NAME.zip from the folder NAME
