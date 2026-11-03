@@ -127,11 +127,24 @@ mvn_cmd=mvn
 
 # The application's jars in $1/lib: the module's own jar and what it needs at run time
 stage_jars() { # DIR
-	local dir=$1 mod=$root/$MODULE jar
+	# MODULE@CLASSIFIER: only the module's jar with that classifier (parley-mail-admin@server: the
+	# server side of a web application), whose dependencies are other modules staged beside it
+	local dir=$1 module=${MODULE%@*} classifier="" mod jar
+	[ "$module" != "$MODULE" ] && classifier=${MODULE#*@}
+	mod=$root/$module
 	mkdir -p "$dir/lib"
+	if [ -n "$classifier" ]; then
+		jar=$(ls "$mod"/target/"$(basename "$module")"-*"$classifier".jar 2>/dev/null | head -1 || true)
+		if [ -z "$jar" ]; then
+			echo "package.sh: no $classifier jar in $mod/target: build all of Parley first (mvn install in parley-build)" >&2
+			exit 1
+		fi
+		cp "$jar" "$dir/lib/"
+		return
+	fi
 	# shellcheck disable=SC2010
-	jar=$(ls "$mod"/target/"$(basename "$MODULE")"-*.jar 2>/dev/null \
-		| grep -v -e '-sources\.jar' -e '-javadoc\.jar' -e '-tests\.jar' -e '-all\.jar' -e '-plugin\.jar' | head -1 || true)
+	jar=$(ls "$mod"/target/"$(basename "$module")"-*.jar 2>/dev/null \
+		| grep -v -e '-sources\.jar' -e '-javadoc\.jar' -e '-tests\.jar' -e '-all\.jar' -e '-plugin\.jar' -e '-server\.jar' | head -1 || true)
 	if [ -z "$jar" ]; then
 		echo "package.sh: no jar in $mod/target: build all of Parley first (mvn install in parley-build)" >&2
 		exit 1

@@ -24,7 +24,7 @@ parley-mail                   parley-mail                   release-2.0.0
 parley-pop3                   parley-pop3                   release-2.0.0
 parley-imap                   parley-imap                   release-2.0.0
 parley-smtp                   parley-smtp                   release-2.0.0
-parley-mail-admin             parley-mail-admin             release-2.0.0  optional
+parley-mail-admin             parley-mail-admin             release-2.0.0
 parley-files-ftp              parley-files-ftp              release-2.0.0
 parley-files-sftp             parley-files-sftp             release-2.0.0
 parley-files-sftp-jsch        parley-files-sftp-jsch        release-2.0.0
