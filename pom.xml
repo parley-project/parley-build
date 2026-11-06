@@ -54,7 +54,11 @@
     <module>../parley-core</module>
     <module>../parley-io</module>
     <module>../parley-term</module>
+    <!-- Identity and access management (depends only on parley-core; parley-net uses it) -->
+    <module>../parley-iam</module>
     <module>../parley-net</module>
+    <!-- The database user registry, built on parley-net -->
+    <module>../parley-net-acl-jdbc</module>
     <module>../parley-dns</module>
 
     <!-- Files (the file system API; the protocols below use it) -->
