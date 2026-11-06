@@ -57,8 +57,6 @@
     <!-- Identity and access management (depends only on parley-core; parley-net uses it) -->
     <module>../parley-iam</module>
     <module>../parley-net</module>
-    <!-- The database user registry, built on parley-net -->
-    <module>../parley-net-acl-jdbc</module>
     <module>../parley-dns</module>
 
     <!-- Files (the file system API; the protocols below use it) -->
@@ -119,6 +117,20 @@
       </activation>
       <modules>
         <module>../parley-mail-admin</module>
+      </modules>
+    </profile>
+
+    <!-- The database user registry (built on parley-net), when its folder is there: it isn't on
+         GitHub, so a build from GitHub goes on without it -->
+    <profile>
+      <id>parley-net-acl-jdbc</id>
+      <activation>
+        <file>
+          <exists>${project.basedir}/../parley-net-acl-jdbc/pom.xml</exists>
+        </file>
+      </activation>
+      <modules>
+        <module>../parley-net-acl-jdbc</module>
       </modules>
     </profile>
   </profiles>
