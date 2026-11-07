@@ -2,3 +2,6 @@
 dist/
 target/
 .settings/org.eclipse.core.resources.prefs
+*.prefs
+/.settings
+/.settings
