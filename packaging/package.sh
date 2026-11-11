@@ -157,6 +157,20 @@ stage_jars() { # DIR
 	MAIN_JAR=$(basename "$jar")
 }
 
+# An application's jars: its module's (MAIN_JAR), and EXTRA_MODULES' with what they need (for an
+# application whose module is a library: pssh's parley-logging, its System.Logger)
+stage_app_jars() { # DIR
+	local keep_module=$MODULE keep_main m
+	stage_jars "$1"
+	keep_main=$MAIN_JAR
+	for m in $EXTRA_MODULES; do
+		MODULE=$m
+		stage_jars "$1"
+	done
+	MODULE=$keep_module
+	MAIN_JAR=$keep_main
+}
+
 # The class path launchers use: every jar in lib (a wildcard, so lib can change)
 # Launchers for Java on PATH (or JAVA_HOME), or, with a runtime folder beside lib, for that Java.
 write_launchers() { # DIR
@@ -301,7 +315,7 @@ package_plain() {
 		return
 	fi
 	local dir=$work/plain/$name
-	stage_jars "$dir"
+	stage_app_jars "$dir"
 	write_launchers "$dir"
 	write_readme "$dir" "Needs Java 17 or later (java on PATH, or JAVA_HOME). Run bin/COMMAND (bin\\COMMAND.cmd on Windows)."
 	archive "$work/plain" "$name"
@@ -312,7 +326,7 @@ package_plain() {
 # The folder an installer puts on the disk: bin (the launchers), lib, runtime
 image_dir() { # DIR
 	local dir=$1
-	stage_jars "$dir"
+	stage_app_jars "$dir"
 	write_launchers "$dir"
 	write_readme "$dir" "It carries its own Java runtime (runtime): nothing else needs to be installed."
 	rm -f "$dir"/bin/*.cmd
