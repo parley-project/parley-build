@@ -8,7 +8,6 @@
 # packaging/checkout.sh clones them; a workflow run can choose another branch for some of them
 # (its "branches" input: FOLDER=BRANCH ...), to build a branch before it is merged.
 swing-widgets                 swing-widgets                 master
-fx-widgets                    fx-widgets                    master
 parley-parent                 parley-parent                 release-2.0.0
 parley-launcher               parley-launcher               release-2.0.0
 parley-brand                  parley-brand                  release-2.0.0
@@ -35,7 +34,6 @@ parley-files-sftp-parley-ssh  parley-files-sftp-parley-ssh  release-2.0.0
 parley-files-jdbc             parley-files-jdbc             release-2.0.0
 parley-credentials-keychain   parley-credentials-keychain   release-2.0.0
 parley-files-swing            parley-files-swing            release-2.0.0
-parley-files-fx               parley-files-fx               release-2.0.0
 parley-dap                    parley-dap                    release-2.0.0
 parley-loupe                  parley-loupe                  release-2.0.0
 fsh                           parley-fsh                    release-2.0.0

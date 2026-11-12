@@ -10,7 +10,7 @@
   Useful variations:
 
     mvn -f parley-build/pom.xml install -DskipTests      build and install all to ~/.m2
-    mvn -f parley-build/pom.xml verify -pl parley-files-fx -am   one module plus what it needs
+    mvn -f parley-build/pom.xml verify -pl parley-files-swing -am   one module plus what it needs
     mvn -f parley-build/pom.xml verify -rf :parley-net   resume after a failure
 
   This is a build convenience only. It is never released or published, and it deliberately
@@ -36,9 +36,8 @@
   <modules>
     <!-- Listed in dependency order (each after what it uses), for reading; Maven sorts them anyway. -->
 
-    <!-- Widget libraries (groupId us.bringardner) -->
+    <!-- Widget library (groupId us.bringardner) -->
     <module>../swing-widgets</module>
-    <module>../fx-widgets</module>
 
     <!-- Parent -->
     <module>../parley-parent</module>
@@ -85,7 +84,6 @@
 
     <!-- File UI components -->
     <module>../parley-files-swing</module>
-    <module>../parley-files-fx</module>
 
     <!-- Debugging: DAP and Loupe -->
     <module>../parley-dap</module>
