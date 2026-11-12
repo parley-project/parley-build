@@ -7,7 +7,7 @@ silicon, Intel) and Windows, and puts the files on the pre-release `v2.0.0-previ
 
 | Application | Plain archive | Installers (own Java runtime) | Native (GraalVM) |
 |---|---|---|---|
-| fsh | `fsh-V.zip`, `.tar.gz` | fsh's own: `.deb`, `.rpm`, `.dmg`, `.msi`, and `fsh-V-PLATFORM-ARCH-jvm.tar.gz` | `fsh-V-PLATFORM-ARCH.tar.gz` (`.zip`), with the terminal browser built in |
+| fsh (with fshdb in the installers) | `fsh-V.zip`, `.tar.gz` | fsh's own, commands only: `.deb`, `.rpm`, `.pkg`, `.msi`, and `fsh-V-PLATFORM-ARCH-jvm.tar.gz` | `fsh-V-PLATFORM-ARCH.tar.gz` (`.zip`), with the terminal browser built in |
 | fsh-ide (Swing, JavaFX) | `fsh-ide-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `fsh-ide-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer (Swing, JavaFX) | `parley-files-viewer-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `parley-files-viewer-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer-tui (`pfv`; fsh has the same browser built in) | `parley-files-viewer-tui-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | (part of fsh, native too) |
@@ -23,13 +23,19 @@ Linux x86-64. The Linux packages' file names have `-` where their versions have 
 ## What the installers install
 
 - **Linux** (`.deb`, `.rpm`): `/opt/parley/NAME` (`bin`, `lib`, `runtime`), the commands in
-  `/usr/bin`, a menu entry for each window application. fsh's own packages install `/opt/fsh` and `/usr/bin/fsh` (in `/etc/shells`).
+  `/usr/bin`, a menu entry for each window application. fsh's own packages install `/opt/fsh`, `/usr/bin/fsh` (in `/etc/shells`) and `/usr/bin/fshdb`, and no menu entry.
 - **macOS**: the window applications as a `.dmg` (an application to drag to Applications, with
   the Swing launcher as its main one and the JavaFX one beside it); the terminal programs as a
-  `.pkg`: `pfv` (`/usr/local/lib/parley/parley-files-viewer-tui`, `/usr/local/bin/pfv`) and `pssh`
-  (`/usr/local/lib/parley/parley-ssh`, `/usr/local/bin/pssh`).
+  `.pkg`: `pfv` (`/usr/local/lib/parley/parley-files-viewer-tui`, `/usr/local/bin/pfv`), `pssh`
+  (`/usr/local/lib/parley/parley-ssh`, `/usr/local/bin/pssh`), and fsh's own, `fsh` and `fshdb`
+  (`/usr/local/lib/parley/fsh`, `/usr/local/bin/fsh` in `/etc/shells`, `/usr/local/bin/fshdb`).
 - **Windows** (`.msi`): `C:\Program Files\NAME`, with Start menu entries (group Parley). The
-  installers don't change `PATH`.
+  installers don't change `PATH`, except fsh's own: `fsh.exe` and `fshdb.exe` have no Start menu
+  entry, and their folder is added to the system's `PATH`.
+
+fsh and fshdb are commands, not desktop applications, on every platform. The desktop
+applications are fsh-ide and parley-files-viewer, each with its own installer and its own Java
+runtime.
 
 ### The servers (`parley-servers`)
 
