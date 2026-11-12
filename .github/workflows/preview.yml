@@ -3,8 +3,8 @@
 #
 #   plain archives    the jars and launchers, for a Java 17 or later already installed
 #   installers        each with its own Java runtime: .deb and .rpm (Linux), .dmg or .pkg
-#                     (macOS), .msi (Windows), for fsh, fsh-ide, the files viewer, pfv and the
-#                     servers (Linux packages, systemd services)
+#                     (macOS), .msi (Windows), for fsh (with fshdb: commands only), fsh-ide, the
+#                     files viewer, pfv and the servers (Linux packages, systemd services)
 #   native binaries   GraalVM: fsh (with the terminal file browser built in), fsh-ide and the files
 #                     viewer (Windows is the tested platform for the two window applications;
 #                     their Linux and macOS builds may fail without failing the run)
@@ -149,6 +149,9 @@ jobs:
           set -e
           sudo dpkg -i fsh_*.deb parley-files-viewer-tui_*.deb parley-ssh_*.deb parley-servers_*.deb
           test "$(/usr/bin/fsh -c 'echo smoke-ok')" = smoke-ok
+          # (fsh's package: commands only, fsh and fshdb, nothing in the application menu)
+          /usr/bin/fshdb --help 2>&1 | grep -q 'Usage: fshdb'
+          test -z "$(dpkg -L fsh | grep -E '/usr/share/applications/|/etc/xdg/menus/')"
           script -qec "pfv --help" /dev/null | grep -q usage
           pssh -V 2>&1 | grep -q 'Parley SSH client'
           id parley
@@ -162,6 +165,18 @@ jobs:
           for f in parley-mail-admin_*.deb; do
             if [ -f "$f" ]; then dpkg-deb -c "$f" | grep -q parley-mail-admin.war; fi
           done
+
+      # (fsh's package: commands in /usr/local/bin, no application)
+      - name: Smoke test (macOS)
+        if: matrix.platform == 'macos'
+        working-directory: parley-build/dist
+        run: |
+          set -e
+          sudo installer -pkg fsh-*.pkg -target /
+          test "$(/usr/local/bin/fsh -c 'echo smoke-ok')" = smoke-ok
+          /usr/local/bin/fshdb --help 2>&1 | grep -q 'Usage: fshdb'
+          grep -qx /usr/local/bin/fsh /etc/shells
+          test ! -e /Applications/fsh.app
 
       - uses: actions/upload-artifact@v4
         with:

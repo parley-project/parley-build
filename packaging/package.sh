@@ -14,7 +14,8 @@
 #                 Windows  NAME-VERSION-windows-ARCH.msi
 #
 # with a .sha256 beside each file. The applications are described in packaging/apps/*.conf; fsh
-# is packaged by its own scripts (tools/ in fsh). The servers (parley-servers) are a Linux
+# is packaged by its own scripts (tools/ in fsh), with fshdb: commands only, on macOS a .pkg
+# (/usr/local/lib/parley/fsh, commands in /usr/local/bin). The servers (parley-servers) are a Linux
 # package (.deb, .rpm: /opt/parley/servers, a systemd service for each, not enabled, settings in
 # /etc/parley, run as the account parley), a macOS package (.pkg: /usr/local/lib/parley/servers,
 # a launchd daemon for each, not started) and one plain archive; the mail servers are one service,
@@ -541,31 +542,35 @@ windows_installer() {
 	sum "$name"
 }
 
-# fsh's own installers (its tools/), with its keyboard library and fshexec, named with the label
+# fsh's own installers (its tools/), with its keyboard library and fshexec, named with the label.
+# They install commands, not applications: fsh, and fshdb on the same Java runtime (fshdb's
+# checkout beside fsh's; it builds against fsh-ide, which the build of all of Parley installed).
 package_fsh_installers() {
-	local fsh=$root/fsh f n
-	for f in tools/build-jlink.sh tools/build-linux-packages.sh tools/build-jpackage.sh tools/build-msi.ps1; do
+	local fsh=$root/fsh fshdb=$root/fshdb f n
+	for f in tools/build-jlink.sh tools/build-linux-packages.sh tools/build-macos-pkg.sh tools/build-msi.ps1; do
 		if [ ! -f "$fsh/$f" ]; then
-			echo "package.sh: fsh has no $f (its installers are on its branch installers until that is merged)" >&2
+			echo "package.sh: fsh has no $f (its command-only installers are on its branch command-packages until that is merged)" >&2
 			exit 1
 		fi
 	done
+	if [ ! -f "$fshdb/pom.xml" ]; then
+		echo "package.sh: no fshdb checkout at $fshdb (it is installed with fsh)" >&2
+		exit 1
+	fi
 	rm -rf "$fsh/dist"
 	case $platform in
 	linux)
-		(cd "$fsh" && sh linux/compile.sh && sh tools/build-jlink.sh --package "$full" && sh tools/build-linux-packages.sh all "$deb_version") ;;
+		(cd "$fsh" && sh linux/compile.sh && sh tools/build-jlink.sh --db "$fshdb" --package "$full" && sh tools/build-linux-packages.sh all "$deb_version") ;;
 	macos)
-		# (hdiutil on a hosted runner sometimes fails with "Resource busy": once more)
-		(cd "$fsh" && sh macos/compile.sh && sh tools/build-jlink.sh --package "$full" \
-			&& { sh tools/build-jpackage.sh dmg "$version" || { sleep 10; sh tools/build-jpackage.sh dmg "$version"; }; }) ;;
+		(cd "$fsh" && sh macos/compile.sh && sh tools/build-jlink.sh --db "$fshdb" --package "$full" && sh tools/build-macos-pkg.sh "$version") ;;
 	windows)
-		(cd "$fsh" && cmd //c 'windows\compile.cmd' && pwsh -NoProfile -ExecutionPolicy Bypass -File tools/build-msi.ps1 -Version "$version" -Arch "$arch") ;;
+		(cd "$fsh" && cmd //c 'windows\compile.cmd' && pwsh -NoProfile -ExecutionPolicy Bypass -File tools/build-msi.ps1 -Version "$version" -Arch "$arch" -DbRepo "$(cygpath -w "$fshdb")") ;;
 	esac
 	for f in "$fsh"/dist/*; do
 		case $f in *.sha256) continue ;; esac
 		n=$(basename "$f")
-		# (the disk image and the .msi are named with the plain version, jpackage's; the Linux
-		# packages with the ~ only the packages' versions need)
+		# (the macOS package and the .msi are named with the plain version, the installers' own;
+		# the Linux packages with the ~ only the packages' versions need)
 		case $n in
 		fsh-"$version"-macos-*|fsh-"$version"-windows-*) n=fsh-$full-${n#fsh-"$version"-} ;;
 		esac
