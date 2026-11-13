@@ -4,7 +4,7 @@
 #
 #   plain       the jars and a launcher for Java on PATH (or JAVA_HOME): NAME-VERSION.zip and
 #               .tar.gz, or NAME-VERSION-PLATFORM-ARCH.zip and .tar.gz for an application whose
-#               jars are for one platform (JavaFX's)
+#               jars are for one platform (PLATFORM_JARS=yes)
 #   installer   with a Java runtime of its own (jlink), so nothing else needs to be installed:
 #                 Linux    NAME_VERSION_ARCH.deb and NAME-VERSION-RELEASE.ARCH.rpm (/opt/parley/NAME,
 #                          commands in /usr/bin, menu entries for the window applications)
@@ -358,7 +358,6 @@ linux_packages() {
 		for l in $LAUNCHERS; do
 			cmd=${l%%=*}
 			local title=$TITLE
-			case $cmd in *-fx) title="$TITLE (JavaFX)" ;; esac
 			cat > "$root_dir/usr/share/applications/$cmd.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
