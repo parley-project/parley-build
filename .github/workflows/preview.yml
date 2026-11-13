@@ -9,6 +9,13 @@
 #                     viewer (Windows is the tested platform for the two window applications;
 #                     their Linux and macOS builds may fail without failing the run)
 #
+# fsh's SNAPSHOT also goes to Maven Central's snapshot repository, with the native jar of every
+# platform (fsh-VERSION-linux-x86_64.jar ...: the keyboard library and fshexec, built here on each
+# platform), which is where parley-launcher gets them: with the secrets CENTRAL_TOKEN_USERNAME and
+# CENTRAL_TOKEN_PASSWORD (a Central Portal user token), and only when every platform was built
+# from the release-2.0.0 branches. The same native files are kept as the run's fsh-natives-PLATFORM
+# artifacts, which fsh's tools/fetch-natives.sh fetches before a release is deployed.
+#
 # The files go on this repository's pre-release v2.0.0-preview, replaced by each run. With the
 # secret PARLEY_RELEASE_TOKEN (a token that can write releases in parley-project's repositories),
 # each application's files also go on the pre-release v2.0.0-preview of its own repository
@@ -39,6 +46,9 @@ concurrency:
 
 env:
   BRANCHES: ${{ inputs.branches }}
+  # fsh's Linux keyboard library and fshexec are built for this glibc and every later one
+  # (fsh's linux/compile.sh, with zig's compilers), whatever the runner's own is
+  FSH_GLIBC: '2.17'
 
 jobs:
   # What would be built, and whether a nightly run has anything new to build
@@ -92,7 +102,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # (the oldest Ubuntu offered: fsh's keyboard library and fshexec need its glibc or later)
+          # (the oldest Ubuntu offered: the Java runtimes in the Linux packages need its glibc or later)
           - { runner: ubuntu-22.04,     platform: linux,   arch: x86_64 }
           - { runner: ubuntu-22.04-arm, platform: linux,   arch: aarch64 }
           - { runner: macos-15,         platform: macos,   arch: aarch64 }
@@ -134,9 +144,15 @@ jobs:
         if: matrix.platform == 'linux'
         run: sudo apt-get install -y rpm
 
+      # (zig's C and C++ compilers build fsh's Linux native files for FSH_GLIBC)
+      - name: zig (fsh's native files)
+        if: matrix.platform == 'linux'
+        run: python3 -m pip install --user ziglang==0.13.0 || python3 -m pip install --user --break-system-packages ziglang==0.13.0
+
       - name: Build all of Parley
         working-directory: parley-build
-        run: mvn -B -ntp install -DskipTests
+        # (no tests and no SpotBugs here: this builds what is packaged; SpotBugs 4.8 also fails on Java 25)
+        run: mvn -B -ntp install -DskipTests -Dspotbugs.skip=true
 
       - name: Package
         working-directory: parley-build
@@ -182,6 +198,27 @@ jobs:
         with:
           name: package-${{ matrix.platform }}-${{ matrix.arch }}
           path: parley-build/dist/*
+          if-no-files-found: error
+
+      # fsh's native files of this platform, as the packaging just built them, for fsh's native jar
+      # (the snapshot job below; tools/fetch-natives.sh in fsh, for a release). COMMIT: what they
+      # were built from
+      - name: fsh's native files
+        run: |
+          set -e
+          mkdir -p fsh-natives
+          for f in fshexec libnativekeyboard.so libnativekeyboard.dylib nativekeyboard.dll; do
+            if [ -f "fsh/${{ matrix.platform }}/$f" ]; then cp "fsh/${{ matrix.platform }}/$f" fsh-natives/; fi
+          done
+          git -C fsh rev-parse HEAD > fsh-natives/COMMIT
+          ls -l fsh-natives
+          # (the keyboard library everywhere; fshexec everywhere but Windows)
+          ls fsh-natives | grep -q nativekeyboard
+          [ "${{ matrix.platform }}" = windows ] || test -f fsh-natives/fshexec
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fsh-natives-${{ matrix.platform }}-${{ matrix.arch }}
+          path: fsh-natives/*
           if-no-files-found: error
 
   # The native binaries, on each platform
@@ -232,9 +269,15 @@ jobs:
           sudo apt-get install -y libx11-dev libxext-dev libxrender-dev libxtst-dev libxi-dev \
             libxrandr-dev libfreetype6-dev libfontconfig1-dev libasound2-dev
 
+      # (zig's C and C++ compilers build fsh's Linux native files for FSH_GLIBC)
+      - name: zig (fsh's native files)
+        if: matrix.platform == 'linux'
+        run: python3 -m pip install --user ziglang==0.13.0 || python3 -m pip install --user --break-system-packages ziglang==0.13.0
+
       - name: Build all of Parley
         working-directory: parley-build
-        run: mvn -B -ntp install -DskipTests
+        # (no tests and no SpotBugs here: this builds what is packaged; SpotBugs 4.8 also fails on Java 25)
+        run: mvn -B -ntp install -DskipTests -Dspotbugs.skip=true
 
       - name: fsh
         working-directory: parley-build
@@ -263,6 +306,87 @@ jobs:
           path: parley-build/dist/*
           if-no-files-found: error
 
+  # fsh's SNAPSHOT on Maven Central's snapshot repository, with every platform's native jar in the
+  # one deploy (a deploy from one platform would leave the others' out: the launcher takes the
+  # newest build's files). Only what the release-2.0.0 branches built, and only when every
+  # platform's packaging succeeded.
+  snapshot:
+    needs: [changes, package]
+    if: needs.changes.outputs.build == 'true' && inputs.branches == ''
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      CENTRAL_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+      CENTRAL_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+    steps:
+      - name: Is there a token?
+        id: token
+        run: |
+          if [ -n "$CENTRAL_USERNAME" ] && [ -n "$CENTRAL_PASSWORD" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No CENTRAL_TOKEN_USERNAME and CENTRAL_TOKEN_PASSWORD: fsh's SNAPSHOT is not deployed."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.deploy == 'true'
+        with:
+          path: parley-build
+
+      - name: The repositories
+        if: steps.token.outputs.deploy == 'true'
+        run: sh parley-build/packaging/checkout.sh $BRANCHES
+
+      # (settings.xml gets the server "central", which fsh's snapshots profile deploys to)
+      - uses: actions/setup-java@v4
+        if: steps.token.outputs.deploy == 'true'
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+          cache-dependency-path: parley-build/pom.xml
+          server-id: central
+          server-username: CENTRAL_USERNAME
+          server-password: CENTRAL_PASSWORD
+
+      - name: Build all of Parley
+        if: steps.token.outputs.deploy == 'true'
+        working-directory: parley-build
+        # (no tests and no SpotBugs here: this builds what is packaged; SpotBugs 4.8 also fails on Java 25)
+        run: mvn -B -ntp install -DskipTests -Dspotbugs.skip=true
+
+      - uses: actions/download-artifact@v4
+        if: steps.token.outputs.deploy == 'true'
+        with:
+          pattern: fsh-natives-*
+          path: fsh-natives
+
+      # natives/PLATFORM/ in fsh: its pom makes a native jar of each
+      - name: Every platform's native files
+        if: steps.token.outputs.deploy == 'true'
+        run: |
+          set -e
+          for p in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64 windows-x86_64; do
+            test -d "fsh-natives/fsh-natives-$p" || { echo "no native files for $p"; exit 1; }
+            # (built from the commit that is deployed)
+            test "$(cat "fsh-natives/fsh-natives-$p/COMMIT")" = "$(git -C fsh rev-parse HEAD)" || { echo "$p was built from another commit"; exit 1; }
+            mkdir -p "fsh/natives/$p"
+            cp "fsh-natives/fsh-natives-$p"/* "fsh/natives/$p/"
+          done
+          ls -lR fsh/natives
+
+      - name: Deploy fsh's SNAPSHOT
+        if: steps.token.outputs.deploy == 'true'
+        working-directory: fsh
+        run: |
+          set -e
+          mvn -B -ntp -Psnapshots deploy -DskipTests -Dspotbugs.skip=true
+          # (the five native jars were in it)
+          for p in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64 windows-x86_64; do
+            ls target/fsh-*-"$p".jar
+          done
+
   # Everything on the pre-release v2.0.0-preview
   publish:
     needs: [changes, package, native]
@@ -273,8 +397,15 @@ jobs:
         with:
           path: parley-build
 
+      # (the packages and the native binaries; not fsh's native files, which are for its native jars)
       - uses: actions/download-artifact@v4
         with:
+          pattern: package-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
           path: dist
           merge-multiple: true
 
