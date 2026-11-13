@@ -325,6 +325,20 @@ jobs:
         run: |
           if [ -n "$CENTRAL_USERNAME" ] && [ -n "$CENTRAL_PASSWORD" ]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
+            # (their shape, never their values: a 401 from Central is most often a secret that was
+            # not copied whole, or one that is not the token itself)
+            for n in CENTRAL_USERNAME CENTRAL_PASSWORD; do
+              eval "v=\$$n"
+              echo "$n: ${#v} characters"
+              case $v in
+                *[[:space:]]*) echo "::warning::$n has a space or a line break in it: copy the value alone" ;;
+              esac
+              case $v in
+                '{'*) echo "::warning::$n starts with { : that is a password Maven encrypted (settings-security.xml), not the token; generate a new token" ;;
+                '$'*) echo "::warning::$n starts with \$ : that is a reference to a variable, not the token itself" ;;
+              esac
+            done
+            [ "$CENTRAL_USERNAME" != "$CENTRAL_PASSWORD" ] || echo "::warning::the two secrets have the same value"
           else
             echo "No CENTRAL_TOKEN_USERNAME and CENTRAL_TOKEN_PASSWORD: fsh's SNAPSHOT is not deployed."
             echo "deploy=false" >> "$GITHUB_OUTPUT"
