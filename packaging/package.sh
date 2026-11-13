@@ -548,7 +548,7 @@ windows_installer() {
 
 # fsh's own installers (its tools/), with its keyboard library and fshexec, named with the label.
 # They install commands, not applications: fsh, and fshdb on the same Java runtime (fshdb's
-# checkout beside fsh's; it builds against parley-fsh-studio, which the build of all of Parley installed).
+# checkout beside fsh's; it builds against parley-fsh-debug, which the build of all of Parley installed).
 package_fsh_installers() {
 	local fsh=$root/fsh fshdb=$root/fshdb f n
 	for f in tools/build-jlink.sh tools/build-linux-packages.sh tools/build-macos-pkg.sh tools/build-msi.ps1; do
