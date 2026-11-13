@@ -8,7 +8,7 @@ silicon, Intel) and Windows, and puts the files on the pre-release `v2.0.0-previ
 | Application | Plain archive | Installers (own Java runtime) | Native (GraalVM) |
 |---|---|---|---|
 | fsh (with fshdb in the installers) | `fsh-V.zip`, `.tar.gz` | fsh's own, commands only: `.deb`, `.rpm`, `.pkg`, `.msi`, and `fsh-V-PLATFORM-ARCH-jvm.tar.gz` | `fsh-V-PLATFORM-ARCH.tar.gz` (`.zip`), with the terminal browser built in |
-| fsh-ide (Swing, JavaFX) | `fsh-ide-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `fsh-ide-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
+| fsh-ide (Swing) | `fsh-ide-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `fsh-ide-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer (Swing, JavaFX) | `parley-files-viewer-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `parley-files-viewer-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer-tui (`pfv`; fsh has the same browser built in) | `parley-files-viewer-tui-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | (part of fsh, native too) |
 | parley-ssh (`pssh`, the SSH client) | `parley-ssh-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | |
