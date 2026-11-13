@@ -100,7 +100,7 @@
     <!-- Applications -->
     <module>../parley-files-viewer</module>
     <module>../parley-files-viewer-tui</module>
-    <module>../fsh-ide</module>
+    <module>../parley-fsh-studio</module>
     <module>../fshdb</module>
 
     <!-- The BOM lists the modules above, so it comes last -->

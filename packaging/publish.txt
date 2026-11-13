@@ -4,7 +4,7 @@
 #
 #   PREFIX                    REPOSITORY
 fsh                         parley-fsh
-fsh-ide                     parley-fsh-ide
+fshstudio                   parley-fsh-studio
 parley-files-viewer         parley-files-viewer
 parley-files-viewer-tui     parley-files-viewer-tui
 parley-ssh                  parley-ssh
