@@ -8,7 +8,7 @@ silicon, Intel) and Windows, and puts the files on the pre-release `v2.0.0-previ
 | Application | Plain archive | Installers (own Java runtime) | Native (GraalVM) |
 |---|---|---|---|
 | fsh (with fshdb in the installers) | `fsh-V.zip`, `.tar.gz` | fsh's own, commands only: `.deb`, `.rpm`, `.pkg`, `.msi`, and `fsh-V-PLATFORM-ARCH-jvm.tar.gz` | `fsh-V-PLATFORM-ARCH.tar.gz` (`.zip`), with the terminal browser built in |
-| fsh-ide (Swing) | `fsh-ide-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `fsh-ide-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
+| Fsh Studio (`fshstudio`; Swing) | `fshstudio-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `fshstudio-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer (Swing, JavaFX) | `parley-files-viewer-V-PLATFORM-ARCH.zip`, `.tar.gz` | `.deb`, `.rpm`, `.dmg`, `.msi` | `parley-files-viewer-V-PLATFORM-ARCH-native.tar.gz` (`.zip`) |
 | parley-files-viewer-tui (`pfv`; fsh has the same browser built in) | `parley-files-viewer-tui-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | (part of fsh, native too) |
 | parley-ssh (`pssh`, the SSH client) | `parley-ssh-V.zip`, `.tar.gz` | `.deb`, `.rpm`, `.pkg`, `.msi` | |
@@ -34,7 +34,7 @@ Linux x86-64. The Linux packages' file names have `-` where their versions have 
   entry, and their folder is added to the system's `PATH`.
 
 fsh and fshdb are commands, not desktop applications, on every platform. The desktop
-applications are fsh-ide and parley-files-viewer, each with its own installer and its own Java
+applications are Fsh Studio and parley-files-viewer, each with its own installer and its own Java
 runtime.
 
 ### The servers (`parley-servers`)
@@ -216,8 +216,8 @@ those that are missing):
 ```sh
 mvn install -DskipTests                       # in parley-build
 packaging/package.sh all                      # plain archives and installers for this platform
-packaging/package.sh --types plain fsh-ide    # one kind, one application
-packaging/native.sh fsh fsh-ide               # native binaries (GraalVM as JAVA_HOME)
+packaging/package.sh --types plain fshstudio   # one kind, one application
+packaging/native.sh fsh fshstudio             # native binaries (GraalVM as JAVA_HOME)
 ```
 
 parley-mail-admin is built (and packaged) when its folder is there: `checkout.sh` leaves it out

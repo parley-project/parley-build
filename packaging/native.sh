@@ -5,7 +5,7 @@
 #   fsh                   FSH-VERSION-PLATFORM-ARCH.tar.gz (.zip on Windows): fsh's build-native
 #                         (the terminal file browser, parley-files-viewer-tui, is part of fsh),
 #                         packaged by fsh's tools/package-native
-#   fsh-ide               NAME-VERSION-PLATFORM-ARCH-native.tar.gz (.zip on Windows): the module's -Pnative
+#   fshstudio             NAME-VERSION-PLATFORM-ARCH-native.tar.gz (.zip on Windows): the module's -Pnative
 #   parley-files-viewer   build, with the JDK libraries it loads and lib/fontconfig.bfc
 #
 # with a .sha256 beside each. Usage: packaging/native.sh [--version V] [--label L] [--out DIR] APP...
@@ -79,7 +79,7 @@ native_fsh() {
 	done
 }
 
-# fsh-ide and the viewer: the module's native profile (target/NAME), the JDK libraries it loads and
+# Fsh Studio and the viewer: the module's native profile (target/NAME), the JDK libraries it loads and
 # lib/fontconfig.bfc, kept together
 native_module() { # NAME MODULE [BINARY: the native binary's name, if it isn't NAME]
 	local name=$1 mod=$root/$2 bin=${3:-$1} stage dist
@@ -116,7 +116,7 @@ for app in "${apps[@]}"; do
 	echo "== $app"
 	case $app in
 	fsh) native_fsh ;;
-	fsh-ide) native_module fsh-ide fsh-ide fshstudio ;;
+	fshstudio) native_module fshstudio fsh-ide ;;
 	parley-files-viewer) native_module parley-files-viewer parley-files-viewer ;;
 	*) echo "native.sh: no native build of $app" >&2; exit 2 ;;
 	esac

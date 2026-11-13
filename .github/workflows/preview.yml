@@ -3,9 +3,9 @@
 #
 #   plain archives    the jars and launchers, for a Java 17 or later already installed
 #   installers        each with its own Java runtime: .deb and .rpm (Linux), .dmg or .pkg
-#                     (macOS), .msi (Windows), for fsh (with fshdb: commands only), fsh-ide, the
+#                     (macOS), .msi (Windows), for fsh (with fshdb: commands only), Fsh Studio, the
 #                     files viewer, pfv and the servers (Linux packages, systemd services)
-#   native binaries   GraalVM: fsh (with the terminal file browser built in), fsh-ide and the files
+#   native binaries   GraalVM: fsh (with the terminal file browser built in), Fsh Studio and the files
 #                     viewer (Windows is the tested platform for the two window applications;
 #                     their Linux and macOS builds may fail without failing the run)
 #
@@ -295,11 +295,11 @@ jobs:
           test "$("$fsh" -c 'echo smoke-ok')" = smoke-ok
           "$fsh" -c 'type view' | grep -q builtin
 
-      - name: fsh-ide and the files viewer
+      - name: Fsh Studio and the files viewer
         # (their native-image settings were recorded on Windows: elsewhere they may not build yet)
         continue-on-error: ${{ matrix.platform != 'windows' }}
         working-directory: parley-build
-        run: packaging/native.sh --label "${{ needs.changes.outputs.label }}" fsh-ide parley-files-viewer
+        run: packaging/native.sh --label "${{ needs.changes.outputs.label }}" fshstudio parley-files-viewer
 
       - uses: actions/upload-artifact@v4
         with:
