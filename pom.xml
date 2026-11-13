@@ -27,7 +27,7 @@
   <packaging>pom</packaging>
 
   <name>Parley build aggregator</name>
-  <description>Builds the Parley modules, the widget libraries and the apps built on Parley (fsh, fsh-loupe, Fsh Studio, fshdb, the viewers and the console) together. Not published.</description>
+  <description>Builds the Parley modules, the widget libraries and the apps built on Parley (fsh, fsh-loupe, parley-fsh-debug, Fsh Studio, fshdb, the viewers and the console) together. Not published.</description>
 
   <properties>
     <maven.deploy.skip>true</maven.deploy.skip>
@@ -96,6 +96,8 @@
          fsh builds parley-files-viewer-tui's browser in; the reactor orders those modules. -->
     <module>../fsh</module>
     <module>../fsh-loupe</module>
+    <!-- Running and debugging fsh scripts, with no user interface: Fsh Studio and fshdb are built on it -->
+    <module>../parley-fsh-debug</module>
 
     <!-- Applications -->
     <module>../parley-files-viewer</module>

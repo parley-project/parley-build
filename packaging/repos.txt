@@ -42,6 +42,7 @@ fsh                           parley-fsh                    release-2.0.0
 fsh-loupe                     parley-fsh-loupe              release-2.0.0
 parley-files-viewer           parley-files-viewer           release-2.0.0
 parley-files-viewer-tui       parley-files-viewer-tui       release-2.0.0
+parley-fsh-debug              parley-fsh-debug              release-2.0.0
 parley-fsh-studio             parley-fsh-studio             release-2.0.0
 fshdb                         parley-fshdb                  release-2.0.0
 parley-bom                    parley-bom                    release-2.0.0
