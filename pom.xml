@@ -92,7 +92,7 @@
     <!-- fsh (groupId us.bringardner). It must be in this build: the viewer, the console and the
          Lanterna browser plugin depend on it, and without it Maven uses whatever fsh is in ~/.m2.
          fsh builds parley-files-viewer-tui's browser in; the reactor orders those modules. -->
-    <module>../fsh</module>
+    <module>../parley-fsh</module>
     <module>../fsh-loupe</module>
     <!-- Running and debugging fsh scripts, with no user interface: Fsh Studio and fshdb are built on it -->
     <module>../parley-fsh-debug</module>
