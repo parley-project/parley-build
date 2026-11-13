@@ -11,7 +11,8 @@
 #
 # fsh's SNAPSHOT also goes to Maven Central's snapshot repository, with the native jar of every
 # platform (fsh-VERSION-linux-x86_64.jar ...: the keyboard library and fshexec, built here on each
-# platform), which is where parley-launcher gets them: with the secrets CENTRAL_TOKEN_USERNAME and
+# platform) and with the SNAPSHOTs of the Parley modules fsh is built from, which is where
+# parley-launcher gets them: with the secrets CENTRAL_TOKEN_USERNAME and
 # CENTRAL_TOKEN_PASSWORD (a Central Portal user token), and only when every platform was built
 # from the release-2.0.0 branches. The same native files are kept as the run's fsh-natives-PLATFORM
 # artifacts, which fsh's tools/fetch-natives.sh fetches before a release is deployed.
@@ -306,8 +307,8 @@ jobs:
           path: parley-build/dist/*
           if-no-files-found: error
 
-  # fsh's SNAPSHOT on Maven Central's snapshot repository, with every platform's native jar in the
-  # one deploy (a deploy from one platform would leave the others' out: the launcher takes the
+  # fsh's SNAPSHOT, and those of the Parley modules it needs, on Maven Central's snapshot
+  # repository, with every platform's native jar in the one deploy (a deploy from one platform would leave the others' out: the launcher takes the
   # newest build's files). Only what the release-2.0.0 branches built, and only when every
   # platform's packaging succeeded.
   snapshot:
@@ -350,12 +351,6 @@ jobs:
           server-username: CENTRAL_USERNAME
           server-password: CENTRAL_PASSWORD
 
-      - name: Build all of Parley
-        if: steps.token.outputs.deploy == 'true'
-        working-directory: parley-build
-        # (no tests and no SpotBugs here: this builds what is packaged; SpotBugs 4.8 also fails on Java 25)
-        run: mvn -B -ntp install -DskipTests -Dspotbugs.skip=true
-
       - uses: actions/download-artifact@v4
         if: steps.token.outputs.deploy == 'true'
         with:
@@ -376,16 +371,27 @@ jobs:
           done
           ls -lR fsh/natives
 
-      - name: Deploy fsh's SNAPSHOT
+      # fsh and, with it, every Parley module it is built from (-am: parley-parent, parley-core,
+      # parley-logging ... and parley-launcher, whose plugin its build runs), so that what the
+      # launcher downloads for fsh is all from this one build. altSnapshotDeploymentRepository: for
+      # every module, whatever its own POM deploys to. A module that is not a -SNAPSHOT is not
+      # published: its "release repository" here is a folder that is thrown away.
+      - name: Deploy the SNAPSHOTs of fsh and the modules it needs
         if: steps.token.outputs.deploy == 'true'
-        working-directory: fsh
+        working-directory: parley-build
         run: |
           set -e
-          mvn -B -ntp -Psnapshots deploy -DskipTests -Dspotbugs.skip=true
+          mvn -B -ntp deploy -DskipTests -Dspotbugs.skip=true -pl :fsh -am \
+            -DaltSnapshotDeploymentRepository=central::https://central.sonatype.com/repository/maven-snapshots/ \
+            -DaltReleaseDeploymentRepository=discard::file://$RUNNER_TEMP/not-deployed
           # (the five native jars were in it)
           for p in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64 windows-x86_64; do
-            ls target/fsh-*-"$p".jar
+            ls ../fsh/target/fsh-*-"$p".jar
           done
+          if [ -d "$RUNNER_TEMP/not-deployed" ]; then
+            echo "Not -SNAPSHOT versions, so not deployed:"
+            find "$RUNNER_TEMP/not-deployed" -name '*.pom'
+          fi
 
   # Everything on the pre-release v2.0.0-preview
   publish:
