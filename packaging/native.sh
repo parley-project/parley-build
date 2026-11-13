@@ -116,7 +116,7 @@ for app in "${apps[@]}"; do
 	echo "== $app"
 	case $app in
 	fsh) native_fsh ;;
-	fsh-ide) native_module fsh-ide fsh-ide studio ;;
+	fsh-ide) native_module fsh-ide fsh-ide fshstudio ;;
 	parley-files-viewer) native_module parley-files-viewer parley-files-viewer ;;
 	*) echo "native.sh: no native build of $app" >&2; exit 2 ;;
 	esac
