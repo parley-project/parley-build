@@ -5,3 +5,5 @@ target/
 *.prefs
 /.settings
 /.settings
+*.prefs
+/.settings
