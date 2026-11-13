@@ -446,7 +446,11 @@ SPEC
 # jpackage's options shared by macOS and Windows: the app's jars, its runtime and its launchers
 jpackage_common() { # INPUT RUNTIME: prints nothing, sets JP
 	local input=$1 runtime=$2 first=yes l cmd main o
-	JP=(--dest "$work/jpackage-out" --temp "$work/jpackage-temp" --name "$NAME" --app-version "$version"
+	# (APP_NAME, when the application sets it, is what jpackage calls the application: the .app in
+	# Applications, the Start menu entry and the installed folder; the installers' file names and
+	# the other launchers keep NAME)
+	local appname=${APP_NAME:-$NAME}
+	JP=(--dest "$work/jpackage-out" --temp "$work/jpackage-temp" --name "$appname" --app-version "$version"
 		--vendor "Tony Bringardner" --copyright "Copyright $(date +%Y) Tony Bringardner"
 		--description "$DESCRIPTION" --input "$input" --main-jar "$MAIN_JAR" --runtime-image "$runtime")
 	for o in $JAVA_OPTIONS; do
@@ -1044,7 +1048,7 @@ for app in "${apps[@]}"; do
 		exit 2
 	fi
 	NAME="" TITLE="" DESCRIPTION="" MODULE="" KIND="" LAUNCHERS="" PLATFORM_JARS=no ICON=parley-icon
-	JAVA_OPTIONS="" FSH_PLUGIN="" UPGRADE_UUID="" MAC_NAME="" SERVERS="" EXTRA_MODULES="" INSTALLER=""
+	JAVA_OPTIONS="" FSH_PLUGIN="" UPGRADE_UUID="" MAC_NAME="" APP_NAME="" SERVERS="" EXTRA_MODULES="" INSTALLER=""
 	# shellcheck source=/dev/null
 	. "$conf"
 	echo "== $NAME"
