@@ -81,8 +81,8 @@ native_fsh() {
 
 # fsh-ide and the viewer: the module's native profile (target/NAME), the JDK libraries it loads and
 # lib/fontconfig.bfc, kept together
-native_module() { # NAME MODULE
-	local name=$1 mod=$root/$2 stage dist
+native_module() { # NAME MODULE [BINARY: the native binary's name, if it isn't NAME]
+	local name=$1 mod=$root/$2 bin=${3:-$1} stage dist
 	(cd "$mod" && "$mvn_cmd" -B -q -Pnative -DskipTests package < /dev/null)
 	# (-native: not the plain archive's name, which is made for the same platform)
 	dist=$name-$full-$platform-$arch-native
@@ -90,15 +90,15 @@ native_module() { # NAME MODULE
 	rm -rf "$stage"
 	mkdir -p "$stage/lib"
 	if [ $platform = windows ]; then
-		cp "$mod/target/$name.exe" "$mod"/target/*.dll "$stage/"
+		cp "$mod/target/$bin.exe" "$mod"/target/*.dll "$stage/"
 	else
-		cp "$mod/target/$name" "$stage/"
+		cp "$mod/target/$bin" "$stage/"
 		cp "$mod"/target/*.so "$mod"/target/*.dylib "$stage/" 2>/dev/null || true
 	fi
 	[ -f "$mod/target/lib/fontconfig.bfc" ] && cp "$mod/target/lib/fontconfig.bfc" "$stage/lib/"
 	[ -f "$mod/LICENSE" ] && cp "$mod/LICENSE" "$stage/"
 	printf 'Run %s. Keep the files in this folder together (the libraries and lib/fontconfig.bfc are loaded by it).\n' \
-		"$name$([ $platform = windows ] && echo .exe)" > "$stage/README.txt"
+		"$bin$([ $platform = windows ] && echo .exe)" > "$stage/README.txt"
 	if [ $platform = macos ]; then
 		printf '\nmacOS marks a download as quarantined, and these files are not notarized. Once, after\nunpacking:\n\n    xattr -dr com.apple.quarantine .\n' >> "$stage/README.txt"
 	fi
@@ -116,7 +116,7 @@ for app in "${apps[@]}"; do
 	echo "== $app"
 	case $app in
 	fsh) native_fsh ;;
-	fsh-ide) native_module fsh-ide fsh-ide ;;
+	fsh-ide) native_module fsh-ide fsh-ide studio ;;
 	parley-files-viewer) native_module parley-files-viewer parley-files-viewer ;;
 	*) echo "native.sh: no native build of $app" >&2; exit 2 ;;
 	esac
