@@ -151,7 +151,8 @@ jobs:
 
       - name: Build all of Parley
         working-directory: parley-build
-        run: mvn -B -ntp install -DskipTests
+        # (no tests and no SpotBugs here: this builds what is packaged; SpotBugs 4.8 also fails on Java 25)
+        run: mvn -B -ntp install -DskipTests -Dspotbugs.skip=true
 
       - name: Package
         working-directory: parley-build
@@ -275,7 +276,8 @@ jobs:
 
       - name: Build all of Parley
         working-directory: parley-build
-        run: mvn -B -ntp install -DskipTests
+        # (no tests and no SpotBugs here: this builds what is packaged; SpotBugs 4.8 also fails on Java 25)
+        run: mvn -B -ntp install -DskipTests -Dspotbugs.skip=true
 
       - name: fsh
         working-directory: parley-build
@@ -351,7 +353,8 @@ jobs:
       - name: Build all of Parley
         if: steps.token.outputs.deploy == 'true'
         working-directory: parley-build
-        run: mvn -B -ntp install -DskipTests
+        # (no tests and no SpotBugs here: this builds what is packaged; SpotBugs 4.8 also fails on Java 25)
+        run: mvn -B -ntp install -DskipTests -Dspotbugs.skip=true
 
       - uses: actions/download-artifact@v4
         if: steps.token.outputs.deploy == 'true'
@@ -378,7 +381,7 @@ jobs:
         working-directory: fsh
         run: |
           set -e
-          mvn -B -ntp -Psnapshots deploy -DskipTests
+          mvn -B -ntp -Psnapshots deploy -DskipTests -Dspotbugs.skip=true
           # (the five native jars were in it)
           for p in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64 windows-x86_64; do
             ls target/fsh-*-"$p".jar
