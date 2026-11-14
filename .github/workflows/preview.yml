@@ -23,7 +23,7 @@
 # (packaging/publish.txt), where people without access to this one can download them.
 #
 # Run it by hand (Actions > preview > Run workflow), optionally building other branches of some
-# repositories (e.g. "fsh=installers parley-ssh=my-branch"); every night it runs when a
+# repositories (e.g. "parley-fsh=installers parley-ssh=my-branch"); every night it runs when a
 # release-2.0.0 branch (or this repository) has changed since the last run that built.
 
 name: preview
@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       branches:
-        description: 'Other branches to build: FOLDER=BRANCH, separated by spaces (e.g. fsh=installers)'
+        description: 'Other branches to build: FOLDER=BRANCH, separated by spaces (e.g. parley-fsh=installers)'
         required: false
         default: ''
   schedule:
@@ -209,9 +209,9 @@ jobs:
           set -e
           mkdir -p fsh-natives
           for f in fshexec libnativekeyboard.so libnativekeyboard.dylib nativekeyboard.dll; do
-            if [ -f "fsh/${{ matrix.platform }}/$f" ]; then cp "fsh/${{ matrix.platform }}/$f" fsh-natives/; fi
+            if [ -f "parley-fsh/${{ matrix.platform }}/$f" ]; then cp "parley-fsh/${{ matrix.platform }}/$f" fsh-natives/; fi
           done
-          git -C fsh rev-parse HEAD > fsh-natives/COMMIT
+          git -C parley-fsh rev-parse HEAD > fsh-natives/COMMIT
           ls -l fsh-natives
           # (the keyboard library everywhere; fshexec everywhere but Windows)
           ls fsh-natives | grep -q nativekeyboard
@@ -379,11 +379,11 @@ jobs:
           for p in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64 windows-x86_64; do
             test -d "fsh-natives/fsh-natives-$p" || { echo "no native files for $p"; exit 1; }
             # (built from the commit that is deployed)
-            test "$(cat "fsh-natives/fsh-natives-$p/COMMIT")" = "$(git -C fsh rev-parse HEAD)" || { echo "$p was built from another commit"; exit 1; }
-            mkdir -p "fsh/natives/$p"
+            test "$(cat "fsh-natives/fsh-natives-$p/COMMIT")" = "$(git -C parley-fsh rev-parse HEAD)" || { echo "$p was built from another commit"; exit 1; }
+            mkdir -p "parley-fsh/natives/$p"
             cp "fsh-natives/fsh-natives-$p"/* "fsh/natives/$p/"
           done
-          ls -lR fsh/natives
+          ls -lR parley-fsh/natives
 
       # fsh and, with it, every Parley module it is built from (-am: parley-parent, parley-core,
       # parley-logging ... and parley-launcher, whose plugin its build runs), so that what the
@@ -400,7 +400,7 @@ jobs:
             -DaltReleaseDeploymentRepository=discard::file://$RUNNER_TEMP/not-deployed
           # (the five native jars were in it)
           for p in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64 windows-x86_64; do
-            ls ../fsh/target/fsh-*-"$p".jar
+            ls ../parley-fsh/target/fsh-*-"$p".jar
           done
           if [ -d "$RUNNER_TEMP/not-deployed" ]; then
             echo "Not -SNAPSHOT versions, so not deployed:"

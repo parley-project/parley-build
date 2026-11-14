@@ -241,7 +241,7 @@ plugins that need more than the jars in `lib`.
 ## The workflow
 
 `preview.yml` runs by hand (Actions > preview > Run workflow), with other branches for some
-repositories if you like (`fsh=installers parley-ssh=my-branch`), and every night when one of the
+repositories if you like (`parley-fsh=installers parley-ssh=my-branch`), and every night when one of the
 `release-2.0.0` branches (or this repository) has changed since the last run that built. A
 scheduled run uses the workflow on this repository's default branch.
 

@@ -93,7 +93,7 @@
          Lanterna browser plugin depend on it, and without it Maven uses whatever fsh is in ~/.m2.
          fsh builds parley-files-viewer-tui's browser in; the reactor orders those modules. -->
     <module>../parley-fsh</module>
-    <module>../fsh-loupe</module>
+    <module>../parley-fsh-loupe</module>
     <!-- Running and debugging fsh scripts, with no user interface: Fsh Studio and fshdb are built on it -->
     <module>../parley-fsh-debug</module>
 
@@ -101,7 +101,7 @@
     <module>../parley-files-viewer</module>
     <module>../parley-files-viewer-tui</module>
     <module>../parley-fsh-studio</module>
-    <module>../fshdb</module>
+    <module>../parley-fshdb</module>
 
     <!-- The BOM lists the modules above, so it comes last -->
     <module>../parley-bom</module>

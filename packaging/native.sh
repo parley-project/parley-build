@@ -62,7 +62,7 @@ sum() { # FILE in $out
 }
 
 native_fsh() {
-	local fsh=$root/fsh
+	local fsh=$root/parley-fsh
 	rm -rf "$fsh/dist"
 	if [ $platform = windows ]; then
 		(cd "$fsh" && cmd //c 'windows\compile.cmd' && cmd //c 'windows\build-native.cmd')

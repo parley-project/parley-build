@@ -36,11 +36,11 @@ parley-credentials-keychain   parley-credentials-keychain   release-2.0.0
 parley-files-swing            parley-files-swing            release-2.0.0
 parley-dap                    parley-dap                    release-2.0.0
 parley-loupe                  parley-loupe                  release-2.0.0
-fsh                           parley-fsh                    release-2.0.0
-fsh-loupe                     parley-fsh-loupe              release-2.0.0
+parley-fsh                    parley-fsh                    release-2.0.0
+parley-fsh-loupe              parley-fsh-loupe              release-2.0.0
 parley-files-viewer           parley-files-viewer           release-2.0.0
 parley-files-viewer-tui       parley-files-viewer-tui       release-2.0.0
 parley-fsh-debug              parley-fsh-debug              release-2.0.0
 parley-fsh-studio             parley-fsh-studio             release-2.0.0
-fshdb                         parley-fshdb                  release-2.0.0
+parley-fshdb                  parley-fshdb                  release-2.0.0
 parley-bom                    parley-bom                    release-2.0.0

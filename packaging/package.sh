@@ -126,16 +126,23 @@ mvn_cmd=mvn
 
 # ---------------------------------------------------------------- staging
 
+# A module's artifactId, from its pom (not its folder: parley-fsh's is fsh)
+artifact_id() { # MODULE-FOLDER
+	awk '/<parent>/ { p = 1 } /<\/parent>/ { p = 0; next }
+		!p && /<artifactId>/ { sub(/.*<artifactId>/, ""); sub(/<\/artifactId>.*/, ""); print; exit }' "$1/pom.xml"
+}
+
 # The application's jars in $1/lib: the module's own jar and what it needs at run time
 stage_jars() { # DIR
 	# MODULE@CLASSIFIER: only the module's jar with that classifier (parley-mail-admin@server: the
 	# server side of a web application), whose dependencies are other modules staged beside it
-	local dir=$1 module=${MODULE%@*} classifier="" mod jar
+	local dir=$1 module=${MODULE%@*} classifier="" mod jar artifact
 	[ "$module" != "$MODULE" ] && classifier=${MODULE#*@}
 	mod=$root/$module
+	artifact=$(artifact_id "$mod")
 	mkdir -p "$dir/lib"
 	if [ -n "$classifier" ]; then
-		jar=$(ls "$mod"/target/"$(basename "$module")"-*"$classifier".jar 2>/dev/null | head -1 || true)
+		jar=$(ls "$mod"/target/"$artifact"-*"$classifier".jar 2>/dev/null | head -1 || true)
 		if [ -z "$jar" ]; then
 			echo "package.sh: no $classifier jar in $mod/target: build all of Parley first (mvn install in parley-build)" >&2
 			exit 1
@@ -144,7 +151,7 @@ stage_jars() { # DIR
 		return
 	fi
 	# shellcheck disable=SC2010
-	jar=$(ls "$mod"/target/"$(basename "$module")"-*.jar 2>/dev/null \
+	jar=$(ls "$mod"/target/"$artifact"-*.jar 2>/dev/null \
 		| grep -v -e '-sources\.jar' -e '-javadoc\.jar' -e '-tests\.jar' -e '-all\.jar' -e '-plugin\.jar' -e '-server\.jar' | head -1 || true)
 	if [ -z "$jar" ]; then
 		echo "package.sh: no jar in $mod/target: build all of Parley first (mvn install in parley-build)" >&2
@@ -549,7 +556,7 @@ windows_installer() {
 # They install commands, not applications: fsh, and fshdb on the same Java runtime (fshdb's
 # checkout beside fsh's; it builds against parley-fsh-debug, which the build of all of Parley installed).
 package_fsh_installers() {
-	local fsh=$root/fsh fshdb=$root/fshdb f n
+	local fsh=$root/parley-fsh fshdb=$root/parley-fshdb f n
 	for f in tools/build-jlink.sh tools/build-linux-packages.sh tools/build-macos-pkg.sh tools/build-msi.ps1; do
 		if [ ! -f "$fsh/$f" ]; then
 			echo "package.sh: fsh has no $f (its command-only installers are on its branch command-packages until that is merged)" >&2
