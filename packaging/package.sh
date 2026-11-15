@@ -126,7 +126,7 @@ mvn_cmd=mvn
 
 # ---------------------------------------------------------------- staging
 
-# A module's artifactId, from its pom (not its folder: parley-fsh's is fsh)
+# A module's artifactId, from its pom (not its folder)
 artifact_id() { # MODULE-FOLDER
 	awk '/<parent>/ { p = 1 } /<\/parent>/ { p = 0; next }
 		!p && /<artifactId>/ { sub(/.*<artifactId>/, ""); sub(/<\/artifactId>.*/, ""); print; exit }' "$1/pom.xml"
