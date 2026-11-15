@@ -80,6 +80,8 @@
     <module>../parley-files-sftp-mina</module>
     <module>../parley-files-sftp-parley-ssh</module>
     <module>../parley-files-jdbc</module>
+    <module>../parley-files-archive</module>
+    <module>../parley-files-webdav</module>
     <module>../parley-credentials-keychain</module>
 
     <!-- File UI components -->
