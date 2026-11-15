@@ -10,7 +10,7 @@
 #                     their Linux and macOS builds may fail without failing the run)
 #
 # fsh's SNAPSHOT also goes to Maven Central's snapshot repository, with the native jar of every
-# platform (fsh-VERSION-linux-x86_64.jar ...: the keyboard library and fshexec, built here on each
+# platform (parley-fsh-VERSION-linux-x86_64.jar ...: the keyboard library and fshexec, built here on each
 # platform) and with the SNAPSHOTs of the Parley modules fsh is built from, which is where
 # parley-launcher gets them: with the secrets CENTRAL_TOKEN_USERNAME and
 # CENTRAL_TOKEN_PASSWORD (a Central Portal user token), and only when every platform was built
@@ -395,12 +395,12 @@ jobs:
         working-directory: parley-build
         run: |
           set -e
-          mvn -B -ntp deploy -DskipTests -Dspotbugs.skip=true -pl :fsh -am \
+          mvn -B -ntp deploy -DskipTests -Dspotbugs.skip=true -pl :parley-fsh -am \
             -DaltSnapshotDeploymentRepository=central::https://central.sonatype.com/repository/maven-snapshots/ \
             -DaltReleaseDeploymentRepository=discard::file://$RUNNER_TEMP/not-deployed
           # (the five native jars were in it)
           for p in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64 windows-x86_64; do
-            ls ../parley-fsh/target/fsh-*-"$p".jar
+            ls ../parley-fsh/target/parley-fsh-*-"$p".jar
           done
           if [ -d "$RUNNER_TEMP/not-deployed" ]; then
             echo "Not -SNAPSHOT versions, so not deployed:"
