@@ -26,12 +26,14 @@ parley-pop3                   parley-pop3                   release-2.0.0
 parley-imap                   parley-imap                   release-2.0.0
 parley-smtp                   parley-smtp                   release-2.0.0
 parley-mail-admin             parley-mail-admin             release-2.0.0
+parley-files-archive          parley-files-archive          release-2.0.0
 parley-files-ftp              parley-files-ftp              release-2.0.0
 parley-files-sftp             parley-files-sftp             release-2.0.0
 parley-files-sftp-jsch        parley-files-sftp-jsch        release-2.0.0
 parley-files-sftp-mina        parley-files-sftp-mina        release-2.0.0
 parley-files-sftp-parley-ssh  parley-files-sftp-parley-ssh  release-2.0.0
 parley-files-jdbc             parley-files-jdbc             release-2.0.0
+parley-files-webdav           parley-files-webdav           release-2.0.0
 parley-credentials-keychain   parley-credentials-keychain   release-2.0.0
 parley-files-swing            parley-files-swing            release-2.0.0
 parley-dap                    parley-dap                    release-2.0.0
